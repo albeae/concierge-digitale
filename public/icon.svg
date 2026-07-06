@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Casa Rossa">
+  <rect width="512" height="512" rx="96" fill="#b85c3c"/>
+  <path d="M256 128 128 236v148a12 12 0 0 0 12 12h96V300h40v96h96a12 12 0 0 0 12-12V236z" fill="#fbf4ea"/>
+  <path d="M256 116 116 232l20 24 120-100 120 100 20-24z" fill="#e0a43b"/>
+  <rect x="232" y="196" width="48" height="52" rx="8" fill="#e0a43b"/>
+</svg>
