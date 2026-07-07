@@ -28,13 +28,15 @@ export interface BnbTheme {
   /**
    * Colore del testo principale (`--foreground`). Opzionale: se assente si usa
    * il default della palette (le strutture create prima della Fase 3 non lo
-   * hanno, e restano identiche).
+   * hanno, e restano identiche). Lo stesso vale per gli altri colori opzionali
+   * qui sotto.
    */
   textColor?: string;
-  /**
-   * Colore delle superfici "di sezione" (`--secondary`): gli sfondi chiari
-   * dietro le icone/chip e i widget. Opzionale, come `textColor`.
-   */
+  /** Colore del testo secondario/grigio (`--muted-foreground`): didascalie, etichette. */
+  mutedColor?: string;
+  /** Sfondo delle card/sezioni (`--card`, `--popover`). */
+  cardColor?: string;
+  /** Sfondo delle icone/chip e dei widget (`--secondary`, `--accent`). */
   sectionColor?: string;
   logoUrl: string;
   heroImage: string;

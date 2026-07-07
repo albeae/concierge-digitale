@@ -59,10 +59,15 @@ export async function updateBnbGeneral(
   };
   // Colori aggiunti in Fase 3: salvati solo se valorizzati, così restano
   // opzionali (assenti = default della palette).
-  const textColor = str(formData.get("textColor"));
-  const sectionColor = str(formData.get("sectionColor"));
-  if (textColor) theme.textColor = textColor;
-  if (sectionColor) theme.sectionColor = sectionColor;
+  for (const key of [
+    "textColor",
+    "mutedColor",
+    "cardColor",
+    "sectionColor",
+  ] as const) {
+    const value = str(formData.get(key));
+    if (value) theme[key] = value;
+  }
 
   const toggles = {
     hasKitchen: formData.get("hasKitchen") === "on",

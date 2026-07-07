@@ -105,6 +105,8 @@ values
   "secondaryColor": "#d99a3c",
   "backgroundColor": "#fbf4ea",
   "textColor": "#3d281f",
+  "mutedColor": "#765f53",
+  "cardColor": "#fffcf8",
   "sectionColor": "#f7e5cf",
   "logoUrl": "/icon.svg",
   "heroImage": "/hero-trastevere.svg"

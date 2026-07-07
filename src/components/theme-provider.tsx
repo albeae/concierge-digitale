@@ -32,8 +32,19 @@ export function ThemeProvider({ theme, children, className }: ThemeProviderProps
     vars["--popover-foreground"] = theme.textColor;
   }
 
+  if (theme.mutedColor) {
+    // Testo secondario/grigio: didascalie, etichette.
+    vars["--muted-foreground"] = theme.mutedColor;
+  }
+
+  if (theme.cardColor) {
+    // Sfondo delle card/sezioni e dei popover.
+    vars["--card"] = theme.cardColor;
+    vars["--popover"] = theme.cardColor;
+  }
+
   if (theme.sectionColor) {
-    // Superfici "di sezione": sfondi chiari di icone/chip e widget.
+    // Sfondi chiari di icone/chip e widget.
     vars["--secondary"] = theme.sectionColor;
     vars["--accent"] = theme.sectionColor;
   }
