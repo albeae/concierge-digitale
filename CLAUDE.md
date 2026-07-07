@@ -89,11 +89,17 @@ Fondamentale in un SaaS multi-tenant:
 - Il **titolare** (autenticato) può leggere/scrivere **solo** le righe di `bnb_clients` dove `owner_id` è il suo, e i `restaurants` con `bnb_client_id` di sua proprietà.
 - L'**ospite** (pubblico, senza login) può **solo leggere** — nessun accesso in scrittura.
 
-**Stato attuale (Fase 2)**: RLS abilitata su entrambe le tabelle con una sola
-policy `for select` per `anon`/`authenticated` (lettura pubblica). Nessuna
-policy di scrittura = insert/update/delete negati a tutti via API: i dati si
-modificano solo dal pannello Supabase. Le policy di scrittura per il titolare
-(filtrate su `owner_id`) arrivano in **Fase 3** con Supabase Auth.
+**Fase 2** (in `supabase/schema.sql`): RLS abilitata su entrambe le tabelle con
+una sola policy `for select` per `anon`/`authenticated` (lettura pubblica).
+
+**Fase 3** (in `supabase/phase-3-auth.sql`): aggiunte le policy di **scrittura**
+per il titolare autenticato — `update` su `bnb_clients` dove `auth.uid() =
+owner_id` (con `with check` che impedisce di cedere la struttura a un altro
+owner) e `for all` (CRUD) su `restaurants` dei propri B&B. La lettura pubblica
+resta invariata (le policy si sommano in OR). L'ospite continua a leggere senza
+login e non può scrivere. Provisioning manuale del titolare: si crea l'utente in
+Supabase Auth e si valorizza `owner_id` a mano (istruzioni in fondo al file SQL);
+la registrazione self-service è rinviata alla Fase 8.
 
 ---
 
@@ -125,10 +131,11 @@ Obiettivo: vedere e toccare con mano l'app su telefono, con dati finti scritti d
 - ✅ Frontend che legge da Supabase invece che dal codice: `src/lib/supabase.ts` (client) + `src/lib/data.ts` (query async), `src/lib/mock-data.ts` eliminato.
 - ⏳ **Passo manuale rimasto**: eseguire `supabase/schema.sql` nell'SQL Editor del progetto Supabase; finché non è fatto, l'app risponde 404 (senza rompersi) e si auto-ripara entro ~5 minuti grazie all'ISR.
 
-### Fase 3 — Pannello admin per il titolare
-- Pagina di login (Supabase Auth: email + password).
-- Form per inserire/modificare Wi-Fi, regole, trasporti, ristoranti.
-- Da questo momento **il titolare inserisce da solo i propri dati**, senza che tu debba intervenire sul database.
+### Fase 3 — Pannello admin per il titolare — ✅ completata (lato codice)
+- ✅ Pagina di login (Supabase Auth: email + password) su **`/admin/login`**, protezione route via **`src/proxy.ts`** (in Next 16 il middleware si chiama "proxy").
+- ✅ Area **`/admin`** protetta: dashboard con le strutture possedute + editor completo per ognuna (dati generali, contenuti multilingua it/en/es con regole della casa, trasporti, CRUD posti).
+- ✅ Policy di scrittura RLS in **`supabase/phase-3-auth.sql`** (da applicare a mano dopo `schema.sql`).
+- ⏳ **Passi manuali rimasti**: (1) eseguire `supabase/phase-3-auth.sql` nell'SQL Editor; (2) creare l'utente titolare in Authentication → Users; (3) collegarlo con `update bnb_clients set owner_id = '<uuid>' where id = 'casa-rossa';`. Poi il titolare fa login e **gestisce da solo i propri dati**.
 
 ### Fase 4 — Multi-tenancy
 - Routing dinamico: `tuosito.it/[slug]` mostra i dati della property corrispondente.
@@ -252,6 +259,16 @@ Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva d
 - **Errori senza crash**: se il DB non risponde o lo schema non è ancora applicato, il data layer logga e restituisce vuoto → la pagina fa `notFound()` (404), la build **non** fallisce.
 - **ISR**: `export const revalidate = 300` su `app/page.tsx` e `app/[bnbId]/page.tsx` — le pagine restano statiche/CDN ma si rigenerano al massimo ogni 5 minuti, quindi le modifiche fatte a mano su Supabase compaiono senza redeploy. `generateStaticParams` ora legge gli slug dal DB; gli slug creati dopo la build vengono comunque serviti alla prima richiesta (`dynamicParams` default).
 - **Campi nuovi collegati**: `address` (mappa + riga indirizzo in Info), `host_phone` / `host_whatsapp` (bottoni rapidi Home, card Emergenze e card Contatti) viaggiano su `Bnb` (`address`, `hostPhone`, `hostWhatsapp`) e arrivano ai componenti come prop; in `src/lib/contacts.ts` restano solo il 112 e gli helper `telUrl`/`whatsappUrl`. La card **Contatti** (Info) ora mostra righe tappabili WhatsApp/telefono reali invece del solo testo generico.
+
+### Fase 3 — autenticazione e pannello admin
+- **Login titolare** su `/admin/login` via Supabase Auth (email+password). Le credenziali passano da una **server action** (`src/app/admin/actions.ts`, `login`/`logout`): mai nel bundle client. Nessuna registrazione pubblica (arriva in Fase 8).
+- **Sessione via cookie** con `@supabase/ssr`: `src/lib/supabase-server.ts` (`createServerClient`, cookie da `next/headers`) per pagine/azioni admin. Le pagine ospite **restano sul client anon "puro"** (`src/lib/supabase.ts`) per non diventare dinamiche e conservare l'ISR statico.
+- **Proxy** (`src/proxy.ts` — in Next 16 il middleware si chiama così): rinfresca la sessione e reindirizza (non loggato → `/admin/login`; loggato su login → `/admin`). `matcher` limitato a `/admin/:path*`, così il sito ospite non ci passa. Non è l'unica difesa: ogni pagina/azione admin richiama `requireUser()` e la RLS protegge i dati.
+- **DAL** (`src/lib/auth.ts`): `getSessionUser` (in `cache()`), `requireUser` (redirect al login), `getOwnedBnbs`/`getOwnedBnb`/`getOwnedBnbPlaces` filtrano per `owner_id` (difesa in profondità oltre alla RLS). I mapper riga↔dominio sono stati estratti in `src/lib/bnb-mappers.ts`, condivisi con `data.ts`.
+- **Editor** (`/admin/[bnbId]`): `general-form.tsx` (nome, tema, toggle, indirizzo, contatti — campi diretti), `content-editor.tsx` (tab lingua IT/EN/ES, Wi-Fi/check-in/regole/trasporti, regole della casa add/remove; lo stato multilingua viaggia in un campo `payload` JSON), `places-editor.tsx` (upsert + delete per singolo posto, con `sort_order` per l'ordine). Le server action (`src/app/admin/[bnbId]/actions.ts`) verificano l'ownership, normalizzano l'input e fanno `revalidatePath('/[bnbId]')` così la modifica si vede subito sul sito ospite.
+- **Fallback lingua preservato**: nel salvataggio contenuti, `en` è sempre scritto; `it`/`es` vengono omessi se lasciati completamente vuoti (ripiegano su `en` per-chiave, coerente con `localize.ts`). Non è stata toccata la logica di localizzazione.
+- **Nuovo campo tipo**: `Place.sortOrder` (colonna `sort_order`), aggiunto ai mapper; le UI ospite lo ignorano (l'ordine è già applicato nella query).
+- **Validato senza DB remoto**: le policy `phase-3-auth.sql` provate su PGlite con `auth.uid()` stubbato (titolare A modifica solo la sua struttura, B bloccato, A non può cedere l'ownership, anon in sola lettura). Login/redirect/errore-credenziali provati in preview; `tsc`, lint e `build` verdi (route `/admin*` correttamente dinamiche, proxy riconosciuto).
 
 ### Note / debiti tecnici da sistemare più avanti
 - ⚠️ **Il feedback 1-3 stelle si perde** (debito noto, lasciato volutamente anche in Fase 2): `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Ora che c'è Supabase si potrà risolvere con una tabella `guest_feedback` (+ policy di insert per `anon`) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
