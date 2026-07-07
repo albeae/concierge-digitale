@@ -71,6 +71,8 @@ export function BnbGuide({ bnb, places }: BnbGuideProps) {
             t={t}
             previewPlaces={previewPlaces}
             onSeeAll={() => setTab("explore")}
+            hostPhone={bnb.hostPhone}
+            hostWhatsapp={bnb.hostWhatsapp}
           />
         )}
         {tab === "explore" && (
@@ -84,6 +86,9 @@ export function BnbGuide({ bnb, places }: BnbGuideProps) {
             places={places}
             locale={locale}
             t={t}
+            address={bnb.address}
+            hostPhone={bnb.hostPhone}
+            hostWhatsapp={bnb.hostWhatsapp}
           />
         )}
       </main>

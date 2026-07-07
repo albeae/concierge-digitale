@@ -17,6 +17,9 @@ interface HomeTabProps {
   t: UiStrings;
   previewPlaces: Place[];
   onSeeAll: () => void;
+  /** Contatti host, dal database (bnb_clients.host_phone / host_whatsapp). */
+  hostPhone: string;
+  hostWhatsapp: string;
 }
 
 export function HomeTab({
@@ -26,6 +29,8 @@ export function HomeTab({
   t,
   previewPlaces,
   onSeeAll,
+  hostPhone,
+  hostWhatsapp,
 }: HomeTabProps) {
   return (
     <div className="space-y-8 pb-6">
@@ -57,7 +62,11 @@ export function HomeTab({
       />
 
       {/* 5. Azioni rapide. */}
-      <QuickActions t={t.actions} />
+      <QuickActions
+        t={t.actions}
+        hostPhone={hostPhone}
+        hostWhatsapp={hostWhatsapp}
+      />
 
       {/* 6. Modulo recensione. */}
       <ReviewModule t={t.review} />

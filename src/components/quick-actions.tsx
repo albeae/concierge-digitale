@@ -1,22 +1,21 @@
 import { MessageCircle, Phone } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { HOST_PHONE, HOST_WHATSAPP, telUrl, whatsappUrl } from "@/lib/contacts";
+import { telUrl, whatsappUrl } from "@/lib/contacts";
 import type { UiStrings } from "@/lib/i18n";
 
 interface QuickActionsProps {
   t: UiStrings["actions"];
+  /** Contatti host, dal database (bnb_clients.host_phone / host_whatsapp). */
+  hostPhone: string;
+  hostWhatsapp: string;
 }
 
-// Contatti host (placeholder centralizzati in lib/contacts.ts).
-const WHATSAPP_URL = whatsappUrl(HOST_WHATSAPP);
-const PHONE_URL = telUrl(HOST_PHONE);
-
-export function QuickActions({ t }: QuickActionsProps) {
+export function QuickActions({ t, hostPhone, hostWhatsapp }: QuickActionsProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <a
-        href={WHATSAPP_URL}
+        href={whatsappUrl(hostWhatsapp)}
         target="_blank"
         rel="noopener noreferrer"
         className={cn(
@@ -28,7 +27,7 @@ export function QuickActions({ t }: QuickActionsProps) {
         {t.whatsapp}
       </a>
       <a
-        href={PHONE_URL}
+        href={telUrl(hostPhone)}
         className={cn(
           buttonVariants({ variant: "outline" }),
           "h-14 gap-2 rounded-2xl text-base font-semibold",

@@ -1,6 +1,6 @@
 import { ChevronRight, Cross, Phone, Siren } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { EMERGENCY_NUMBER, HOST_PHONE, telUrl } from "@/lib/contacts";
+import { EMERGENCY_NUMBER, telUrl } from "@/lib/contacts";
 import { pick } from "@/lib/localize";
 import type { UiStrings } from "@/lib/i18n";
 import type { Locale, Place } from "@/types";
@@ -8,6 +8,8 @@ import type { Locale, Place } from "@/types";
 interface EmergencyCardProps {
   t: UiStrings["emergency"];
   locale: Locale;
+  /** Telefono host, dal database (bnb_clients.host_phone). */
+  hostPhone: string;
   /** Farmacia più vicina, ricavata dai posti (categoria servizio). Opzionale. */
   pharmacy?: Place;
 }
@@ -59,7 +61,12 @@ function Row({
   );
 }
 
-export function EmergencyCard({ t, locale, pharmacy }: EmergencyCardProps) {
+export function EmergencyCard({
+  t,
+  locale,
+  hostPhone,
+  pharmacy,
+}: EmergencyCardProps) {
   return (
     <Card className="py-0">
       <CardContent className="p-0">
@@ -82,7 +89,7 @@ export function EmergencyCard({ t, locale, pharmacy }: EmergencyCardProps) {
             value={EMERGENCY_NUMBER}
           />
           <Row
-            href={telUrl(HOST_PHONE)}
+            href={telUrl(hostPhone)}
             tint="brand"
             icon={<Phone className="size-5" aria-hidden />}
             value={t.callHost}

@@ -4,6 +4,7 @@ import {
   CookingPot,
   LogOut,
   MapPin,
+  MessageCircle,
   Phone,
   ScrollText,
   Sparkles,
@@ -16,6 +17,7 @@ import { RulesCard } from "@/components/rules-card";
 import { SectionHeading } from "@/components/section-heading";
 import { TransportBlocks } from "@/components/transport-blocks";
 import { Card, CardContent } from "@/components/ui/card";
+import { telUrl, whatsappUrl } from "@/lib/contacts";
 import type { UiStrings } from "@/lib/i18n";
 import type { BnbContent, BnbLocation, BnbToggles, Locale, Place } from "@/types";
 
@@ -26,6 +28,10 @@ interface InfoTabProps {
   places: Place[];
   locale: Locale;
   t: UiStrings;
+  /** Indirizzo e contatti host, dal database (colonne di bnb_clients). */
+  address: string;
+  hostPhone: string;
+  hostWhatsapp: string;
 }
 
 /** Farmacia più vicina fra i posti (categoria servizio), per la card Emergenze. */
@@ -36,9 +42,6 @@ function findPharmacy(places: Place[]): Place | undefined {
     return name.includes("farmacia") || name.includes("pharmacy");
   });
 }
-
-// Indirizzo finto placeholder: da collegare al dato reale del B&B più avanti.
-const ADDRESS = "Via della Lungaretta 42, Trastevere, Roma";
 
 function AmenityCard({
   icon: Icon,
@@ -73,6 +76,9 @@ export function InfoTab({
   places,
   locale,
   t,
+  address,
+  hostPhone,
+  hostWhatsapp,
 }: InfoTabProps) {
   const hasAnyAmenity =
     toggles.hasKitchen || toggles.hasParking || toggles.offersBreakfast;
@@ -81,7 +87,12 @@ export function InfoTab({
   return (
     <div className="space-y-8 pb-6">
       {/* Emergenze: numeri utili sempre in evidenza in cima alla tab */}
-      <EmergencyCard t={t.emergency} locale={locale} pharmacy={pharmacy} />
+      <EmergencyCard
+        t={t.emergency}
+        locale={locale}
+        hostPhone={hostPhone}
+        pharmacy={pharmacy}
+      />
 
       {/* Check-in / Check-out */}
       <Card className="py-0">
@@ -144,22 +155,51 @@ export function InfoTab({
       {/* Location & Trasporti */}
       <section className="space-y-3">
         <SectionHeading icon={MapPin}>{t.transport.title}</SectionHeading>
-        <MapEmbed address={ADDRESS} ariaLabel={t.transport.mapAria} />
+        <MapEmbed address={address} ariaLabel={t.transport.mapAria} />
         <p className="flex items-center gap-1.5 px-1 text-sm text-muted-foreground">
           <MapPin className="size-4 shrink-0" aria-hidden />
-          {ADDRESS}
+          {address}
         </p>
         <TransportBlocks location={location} t={t.transport} />
       </section>
 
-      {/* Contatti */}
+      {/* Contatti: testo + righe tappabili con i contatti reali dell'host */}
       <section className="space-y-3">
         <SectionHeading icon={Phone}>{t.info.contactTitle}</SectionHeading>
         <Card className="py-0">
-          <CardContent className="p-5">
-            <p className="text-base leading-relaxed text-muted-foreground">
+          <CardContent className="p-0">
+            <p className="px-5 pb-3 pt-5 text-base leading-relaxed text-muted-foreground">
               {t.info.contactBody}
             </p>
+            <div className="divide-y divide-border">
+              <a
+                href={whatsappUrl(hostWhatsapp)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-5 py-4 transition-colors active:bg-secondary/50"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary">
+                  <MessageCircle className="size-5 text-terracotta" aria-hidden />
+                </span>
+                <p className="min-w-0 flex-1 truncate text-base font-semibold">
+                  {t.actions.whatsapp}
+                </p>
+              </a>
+              <a
+                href={telUrl(hostPhone)}
+                className="flex items-center gap-3 px-5 py-4 transition-colors active:bg-secondary/50"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary">
+                  <Phone className="size-5 text-terracotta" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t.actions.call}
+                  </p>
+                  <p className="truncate text-base font-semibold">{hostPhone}</p>
+                </div>
+              </a>
+            </div>
           </CardContent>
         </Card>
       </section>

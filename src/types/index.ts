@@ -1,10 +1,10 @@
 /**
  * Tipi di dominio dell'app Concierge Digitale.
  *
- * La forma ricalca lo schema Supabase definitivo (vedi CLAUDE.md): un'unica
+ * La forma ricalca lo schema Supabase (vedi supabase/schema.sql): un'unica
  * entità `bnb_clients` con tema, toggle e contenuti localizzati (it/en/es) come
  * jsonb, più una tabella `restaurants`/posti separata con FK `bnb_client_id`.
- * I dati sono ancora finti: vedi `src/lib/mock-data.ts`.
+ * Da Fase 2 i dati arrivano davvero da Supabase: vedi `src/lib/data.ts`.
  */
 
 export type Locale = "it" | "en" | "es";
@@ -68,6 +68,15 @@ export interface Bnb {
   toggles: BnbToggles;
   content: Localized<BnbContent>;
   location: Localized<BnbLocation>;
+  /** Indirizzo "neutro" per l'embed della mappa (colonna `address`). */
+  address: string;
+  /** Telefono dell'host per i link `tel:` (colonna `host_phone`). */
+  hostPhone: string;
+  /**
+   * Numero WhatsApp dell'host per i link `wa.me`: solo cifre con prefisso
+   * internazionale, senza `+` (colonna `host_whatsapp`).
+   */
+  hostWhatsapp: string;
 }
 
 /** Categoria di un posto consigliato dall'host. */

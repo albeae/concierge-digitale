@@ -1,14 +1,12 @@
 /**
- * Contatti dell'host — fonte UNICA (usata da azioni rapide Home e card
- * Emergenze), così i numeri non vengono ripetuti a mano nei componenti.
+ * Costanti e helper per i contatti telefonici.
  *
- * Placeholder da collegare: nello schema Supabase questi diventeranno campi
- * contatto su `bnb_clients` (telefono/WhatsApp dell'host). Vedi CLAUDE.md.
- * Il 112 è il numero unico europeo per le emergenze: è una costante, non un
- * contatto dell'host.
+ * Da Fase 2 il telefono/WhatsApp dell'host non sono più placeholder nel
+ * codice: arrivano dal database (colonne `host_phone` / `host_whatsapp` di
+ * `bnb_clients`) e viaggiano nei componenti come prop (`bnb.hostPhone` /
+ * `bnb.hostWhatsapp`). Il 112 è il numero unico europeo per le emergenze:
+ * è una costante, non un contatto dell'host.
  */
-export const HOST_PHONE = "+390000000000";
-export const HOST_WHATSAPP = "390000000000";
 
 /** Numero unico europeo per le emergenze. */
 export const EMERGENCY_NUMBER = "112";

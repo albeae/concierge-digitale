@@ -1,6 +1,6 @@
 /**
  * Etichette dell'interfaccia (chrome) nelle due lingue.
- * I contenuti veri e propri stanno nei dati (`mock-data.ts`); qui ci sono
+ * I contenuti veri e propri stanno nei dati (su Supabase, via `data.ts`); qui ci sono
  * solo i testi fissi della UI, così che cambiando lingua cambi tutto: sia i
  * contenuti sia i titoli delle sezioni, le tab e i pulsanti.
  */
