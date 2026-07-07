@@ -49,34 +49,37 @@ Questa è la parte concettualmente più importante: se lo schema è fatto bene, 
 
 ### Tabelle principali
 
-> **Schema definitivo** (aggiornato). La vecchia tabella `properties` + le tabelle
-> `wifi_info` / `house_rules` / `transport_info` separate sono state sostituite da
-> un'unica tabella **`bnb_clients`** con colonne `jsonb`. La Fase 1 (mock in
-> `src/lib/mock-data.ts`) rispecchia già questo schema: `bnbs` ↔ `bnb_clients`,
-> `places` ↔ `restaurants`.
+> **Schema implementato in Fase 2**: l'SQL completo (tabelle + RLS + seed) è in
+> **`supabase/schema.sql`**, da eseguire nell'SQL Editor di Supabase. La vecchia
+> tabella `properties` + le tabelle `wifi_info` / `house_rules` /
+> `transport_info` separate sono state sostituite da un'unica tabella
+> **`bnb_clients`** con colonne `jsonb`, più `restaurants` per i posti.
 
 **`bnb_clients`** (una riga per ogni B&B — è il "cliente" del SaaS)
 - `id` (testo, slug usato nell'URL — es. `casa-rossa`, `villa-borghese`)
 - `name`
-- `owner_id` (riferimento a un utente Supabase Auth. **Non univoco**: più righe possono condividere lo stesso `owner_id`, così un titolare potrà gestire più strutture senza cambiare schema)
+- `owner_id` (uuid **nullable**, FK verso `auth.users`. **Non univoco**: più righe possono condividere lo stesso `owner_id`, così un titolare potrà gestire più strutture senza cambiare schema. `NULL` finché non c'è il login: si valorizza in Fase 3 con Supabase Auth)
 - `theme` (jsonb: `primaryColor`, `secondaryColor`, `backgroundColor`, `logoUrl`, `heroImage`)
 - `toggles` (jsonb: `hasKitchen`, `hasParking`, `offersBreakfast`)
-- `content` (jsonb bilingue `{ it, en }`: `welcomeMessage`, `wifiNetworkName`, `wifiPassword`, `checkIn`, `checkOut`, `houseRules[]`)
-- `location` (jsonb bilingue `{ it, en }`: `airport`, `train`, `ztl`)
+- `content` (jsonb bilingue `{ it, en, es? }`: `welcomeMessage`, `wifiNetworkName`, `wifiPassword`, `checkIn`, `checkOut`, `houseRules[]`)
+- `location` (jsonb bilingue `{ it, en, es? }`: `airport`, `train`, `ztl`)
+- `address` (testo, indirizzo "neutro" per l'embed della mappa in Info)
+- `host_phone` / `host_whatsapp` (testo, contatti host per i bottoni `tel:` / `wa.me`)
 - `created_at`
-- ⚠️ *Da aggiungere quando serve:* un campo `address` (per l'embed della mappa in Info, ora placeholder) e campi contatto host (telefono/WhatsApp, ora placeholder nei bottoni Home).
 
 Wi-Fi, regole della casa e trasporti vivono **dentro** i jsonb `content`/`location`: niente tabelle dedicate finché non serve un editing granulare (in quel caso si potranno estrarre `house_rules` / `transport_info` con FK `bnb_client_id`).
 
 **`restaurants`** (posti consigliati — tabella separata, FK verso il B&B)
-- `id`
-- `bnb_client_id` (FK → `bnb_clients.id`)
-- `category` (`ristorante` | `bar` | `servizio`)
+- `id` (testo; default `gen_random_uuid()::text`, il seed usa gli id parlanti del mock)
+- `bnb_client_id` (FK → `bnb_clients.id`, `on delete cascade`)
+- `category` (`ristorante` | `bar` | `servizio`, con `check` constraint)
 - `name` (jsonb `{ it, en }`)
-- `description` (jsonb `{ it, en }` — la citazione/raccomandazione dell'host)
+- `description` (jsonb `{ it, en, es }` — la citazione/raccomandazione dell'host)
 - `walking_distance` (es. `"5 min"`; il suffisso "a piedi/walk" è localizzato lato UI)
 - `image_url`
 - `google_maps_url`
+- `sort_order` (intero: ordine di presentazione nella lista, il DB da solo non garantirebbe un ordine stabile)
+- `created_at`
 
 **`users`** — gestita automaticamente da Supabase Auth (non la crei tu), collegata a `bnb_clients.owner_id`.
 
@@ -84,9 +87,13 @@ Wi-Fi, regole della casa e trasporti vivono **dentro** i jsonb `content`/`locati
 
 Fondamentale in un SaaS multi-tenant:
 - Il **titolare** (autenticato) può leggere/scrivere **solo** le righe di `bnb_clients` dove `owner_id` è il suo, e i `restaurants` con `bnb_client_id` di sua proprietà.
-- L'**ospite** (pubblico, senza login) può **solo leggere** i dati del B&B collegato allo slug che ha scansionato — nessun accesso in scrittura, nessun accesso ad altri B&B.
+- L'**ospite** (pubblico, senza login) può **solo leggere** — nessun accesso in scrittura.
 
-Supabase gestisce questo con delle "policy" scritte in SQL — è uno dei primi concetti tecnici da far spiegare e implementare a Claude Code quando arrivi a quella fase.
+**Stato attuale (Fase 2)**: RLS abilitata su entrambe le tabelle con una sola
+policy `for select` per `anon`/`authenticated` (lettura pubblica). Nessuna
+policy di scrittura = insert/update/delete negati a tutti via API: i dati si
+modificano solo dal pannello Supabase. Le policy di scrittura per il titolare
+(filtrate su `owner_id`) arrivano in **Fase 3** con Supabase Auth.
 
 ---
 
@@ -113,10 +120,10 @@ Obiettivo: vedere e toccare con mano l'app su telefono, con dati finti scritti d
 - Nessun login, nessun database ancora.
 - ✅ **Deployata su Vercel**: repo GitHub `albeae/concierge-digitale`, live su `concierge-digitale.vercel.app`. Deploy automatico a ogni `git push` su `main`. Manca ancora il test dal telefono reale via QR.
 
-### Fase 2 — Collegamento a Supabase
-- Crea lo schema descritto sopra nel pannello Supabase (Table Editor, senza scrivere SQL a mano se preferisci).
-- Inserisci a mano i dati di un B&B di prova.
-- Modifica il frontend perché legga i dati da Supabase invece che dal codice.
+### Fase 2 — Collegamento a Supabase — ✅ completata (lato codice)
+- ✅ Schema + RLS + seed scritti in **`supabase/schema.sql`** (da eseguire una volta nell'SQL Editor di Supabase — con la sola anon key il codice non può creare tabelle).
+- ✅ Frontend che legge da Supabase invece che dal codice: `src/lib/supabase.ts` (client) + `src/lib/data.ts` (query async), `src/lib/mock-data.ts` eliminato.
+- ⏳ **Passo manuale rimasto**: eseguire `supabase/schema.sql` nell'SQL Editor del progetto Supabase; finché non è fatto, l'app risponde 404 (senza rompersi) e si auto-ripara entro ~5 minuti grazie all'ISR.
 
 ### Fase 3 — Pannello admin per il titolare
 - Pagina di login (Supabase Auth: email + password).
@@ -178,7 +185,7 @@ Il flusso pratico consigliato: apri Claude Code nella cartella del progetto e gl
 
 ## 9. Decisioni prese finora (stato dell'implementazione)
 
-Registro delle scelte già implementate nel codice (Fase 1, dati finti).
+Registro delle scelte già implementate nel codice (Fase 1 + Fase 2).
 
 ### Stack e struttura
 - **Next.js 16** (App Router, TypeScript, Turbopack) + **Tailwind CSS v4** + **shadcn/ui** (stile base-nova, icone lucide).
@@ -205,7 +212,7 @@ Navigazione a tab lato client (stato in `BnbGuide`), barra fissa in basso stile 
 **Esplora** (`explore-tab.tsx`) — feed completo dei posti con **filtri per categoria** (Tutti / Ristoranti / Bar / Servizi).
 
 **Info** (`info-tab.tsx`), lista verticale di card:
-0. Card **Emergenze** (`emergency-card.tsx`) in cima: 112 (numero unico europeo), chiama host, e **farmacia più vicina** ricavata dai posti (`servizio` il cui nome contiene "farmacia/pharmacy"). Accento rosso dal token `--destructive`. Contatti host centralizzati in `src/lib/contacts.ts` (usati anche dalle azioni rapide Home).
+0. Card **Emergenze** (`emergency-card.tsx`) in cima: 112 (numero unico europeo), chiama host, e **farmacia più vicina** ricavata dai posti (`servizio` il cui nome contiene "farmacia/pharmacy"). Accento rosso dal token `--destructive`. I contatti host arrivano dal database come prop (`bnb.hostPhone`/`bnb.hostWhatsapp`, usati anche dalle azioni rapide Home); in `src/lib/contacts.ts` restano il 112 e gli helper `telUrl`/`whatsappUrl`.
 1. Card **Check-in / Check-out** (`content.checkIn` / `content.checkOut`)
 2. Card **Regole + Raccolta differenziata** (`rules-card.tsx`): regole da `houseRules` + 5 cestini con colori standard Roma/AMA
 3. Card **servizi** (`Cucina` / `Parcheggio` / `Colazione`): renderizzate **solo se il relativo toggle è true** (rendering condizionale, non nascondere via CSS)
@@ -238,9 +245,16 @@ Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva d
 - Card con `rounded-3xl`, **ombre morbide** (niente bordi netti/ring), tanto respiro tra le sezioni. Base modificata in `src/components/ui/card.tsx`.
 - Navigazione a tab con barra fissa in basso; header e nav con ombra soft.
 
+### Fase 2 — dati da Supabase
+- **Schema SQL versionato** in `supabase/schema.sql` (tabelle + RLS + seed di Casa Rossa con i 7 posti, identico ai vecchi mock): si applica a mano nell'SQL Editor di Supabase, perché l'app ha solo la **anon key** (che grazie alla RLS può solo leggere). Il file è rieseguibile senza duplicare il seed (`on conflict do nothing`).
+- **Client**: `src/lib/supabase.ts` — un solo `createClient` condiviso, env `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (in `.env.local` e su Vercel); lancia un errore chiaro se mancano.
+- **Data layer**: `src/lib/data.ts` — `getBnb` / `getBnbIds` / `getPlaces` ora **async** su Supabase, stesse firme di prima (i server component fanno `await`). Mappano snake_case → camelCase; i jsonb hanno già la forma dei tipi di dominio. Ogni funzione è avvolta in `cache()` di React (una query sola per richiesta anche se chiamata da `generateMetadata` + pagina). `src/lib/mock-data.ts` **eliminato**.
+- **Errori senza crash**: se il DB non risponde o lo schema non è ancora applicato, il data layer logga e restituisce vuoto → la pagina fa `notFound()` (404), la build **non** fallisce.
+- **ISR**: `export const revalidate = 300` su `app/page.tsx` e `app/[bnbId]/page.tsx` — le pagine restano statiche/CDN ma si rigenerano al massimo ogni 5 minuti, quindi le modifiche fatte a mano su Supabase compaiono senza redeploy. `generateStaticParams` ora legge gli slug dal DB; gli slug creati dopo la build vengono comunque serviti alla prima richiesta (`dynamicParams` default).
+- **Campi nuovi collegati**: `address` (mappa + riga indirizzo in Info), `host_phone` / `host_whatsapp` (bottoni rapidi Home, card Emergenze e card Contatti) viaggiano su `Bnb` (`address`, `hostPhone`, `hostWhatsapp`) e arrivano ai componenti come prop; in `src/lib/contacts.ts` restano solo il 112 e gli helper `telUrl`/`whatsappUrl`. La card **Contatti** (Info) ora mostra righe tappabili WhatsApp/telefono reali invece del solo testo generico.
+
 ### Note / debiti tecnici da sistemare più avanti
-- ⚠️ **Il feedback 1-3 stelle si perde**: `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Nessun database in Fase 1, quindi non c'è dove scriverlo. Da risolvere in Fase 2 con Supabase (tabella `guest_feedback` o simile) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
+- ⚠️ **Il feedback 1-3 stelle si perde** (debito noto, lasciato volutamente anche in Fase 2): `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Ora che c'è Supabase si potrà risolvere con una tabella `guest_feedback` (+ policy di insert per `anon`) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
 - `walkingDistance` è un campo singolo (non `{it,en}`): valore neutro (es. "5 min") + suffisso localizzato lato UI.
 - `imageUrl` dei **posti** è ancora vuoto → card con emoji di categoria come placeholder (l'hero invece usa già `theme.heroImage`). `next/image` è pronto; per foto da URL esterni servirà configurare `remotePatterns`.
-- **Dati/link placeholder da collegare** (con commento nel codice): contatti host (`wa.me` / `tel:`) ora centralizzati in `src/lib/contacts.ts` (`HOST_PHONE`/`HOST_WHATSAPP`, diventeranno campi su `bnb_clients`), link Google Reviews, indirizzo della mappa (manca un campo `address` in `bnb_clients`), meteo del widget (serve un'API). L'ora locale è invece reale.
-- La card **Contatti** (Info) mostra un testo generico finché non ci saranno campi contatto host nello schema.
+- **Valori seed ancora finti nel database**: `address` ("Via della Lungaretta 42") e `host_phone`/`host_whatsapp` (`+390000000000`) di Casa Rossa sono i vecchi placeholder, ora **da aggiornare dal pannello Supabase** con i dati reali (il codice li legge già). Restano placeholder nel codice: link Google Reviews (`placeid`) e meteo del widget (serve un'API). L'ora locale è invece reale.
