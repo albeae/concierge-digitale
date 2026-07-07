@@ -97,4 +97,6 @@ export interface Place {
   walkingDistance: string;
   imageUrl: string;
   googleMapsUrl: string;
+  /** Ordine di presentazione nella lista (crescente). Colonna `sort_order`. */
+  sortOrder: number;
 }

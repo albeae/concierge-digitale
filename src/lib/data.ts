@@ -1,11 +1,10 @@
 /**
- * Data layer (Fase 2): legge B&B e posti consigliati da Supabase.
+ * Data layer pubblico (Fase 2): legge B&B e posti consigliati da Supabase per
+ * le pagine ospite, con il client anon "puro" (`src/lib/supabase.ts`).
  *
- * Sostituisce i dati finti di `mock-data.ts` mantenendo le stesse firme
- * (ora async): i server component fanno `await getBnb(...)` ecc.
- * Le colonne arrivano in snake_case dal database e vengono mappate qui sui
- * tipi camelCase di `src/types`; i jsonb (theme, toggles, content, location,
- * name, description) hanno già la forma dei tipi di dominio.
+ * Mantiene le firme async usate dai server component. Le colonne arrivano in
+ * snake_case e vengono mappate sui tipi camelCase in `src/lib/bnb-mappers.ts`
+ * (condivisi con il data layer admin, `src/lib/auth.ts`).
  *
  * Ogni funzione è avvolta in `cache()` di React: dentro la stessa richiesta
  * (es. `generateMetadata` + pagina) la query parte una volta sola.
@@ -14,76 +13,16 @@
  * invece di far fallire build o richiesta.
  */
 import { cache } from "react";
+import {
+  BNB_COLUMNS,
+  PLACE_COLUMNS,
+  mapBnb,
+  mapPlace,
+  type BnbRow,
+  type PlaceRow,
+} from "@/lib/bnb-mappers";
 import { supabase } from "@/lib/supabase";
-import type {
-  Bnb,
-  BnbContent,
-  BnbLocation,
-  BnbTheme,
-  BnbToggles,
-  Localized,
-  LocalizedText,
-  Place,
-  PlaceCategory,
-} from "@/types";
-
-/** Riga di `bnb_clients` così come esce da Supabase. */
-interface BnbRow {
-  id: string;
-  name: string;
-  theme: BnbTheme;
-  toggles: BnbToggles;
-  content: Localized<BnbContent>;
-  location: Localized<BnbLocation>;
-  address: string;
-  host_phone: string;
-  host_whatsapp: string;
-}
-
-/** Riga di `restaurants` così come esce da Supabase. */
-interface PlaceRow {
-  id: string;
-  bnb_client_id: string;
-  category: PlaceCategory;
-  name: LocalizedText;
-  description: LocalizedText;
-  walking_distance: string;
-  image_url: string;
-  google_maps_url: string;
-}
-
-const BNB_COLUMNS =
-  "id, name, theme, toggles, content, location, address, host_phone, host_whatsapp";
-
-const PLACE_COLUMNS =
-  "id, bnb_client_id, category, name, description, walking_distance, image_url, google_maps_url";
-
-function mapBnb(row: BnbRow): Bnb {
-  return {
-    id: row.id,
-    name: row.name,
-    theme: row.theme,
-    toggles: row.toggles,
-    content: row.content,
-    location: row.location,
-    address: row.address,
-    hostPhone: row.host_phone,
-    hostWhatsapp: row.host_whatsapp,
-  };
-}
-
-function mapPlace(row: PlaceRow): Place {
-  return {
-    id: row.id,
-    bnbId: row.bnb_client_id,
-    category: row.category,
-    name: row.name,
-    description: row.description,
-    walkingDistance: row.walking_distance,
-    imageUrl: row.image_url,
-    googleMapsUrl: row.google_maps_url,
-  };
-}
+import type { Bnb, Place } from "@/types";
 
 /** Restituisce un B&B dato il suo id (slug dell'URL), o undefined. */
 export const getBnb = cache(async (id: string): Promise<Bnb | undefined> => {
