@@ -104,6 +104,8 @@ values
   "primaryColor": "#b85c3c",
   "secondaryColor": "#d99a3c",
   "backgroundColor": "#fbf4ea",
+  "textColor": "#3d281f",
+  "sectionColor": "#f7e5cf",
   "logoUrl": "/icon.svg",
   "heroImage": "/hero-trastevere.svg"
 }$json$::jsonb,

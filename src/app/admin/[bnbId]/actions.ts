@@ -50,13 +50,19 @@ export async function updateBnbGeneral(
   const name = str(formData.get("name"));
   if (!name) return { ok: false, error: "Il nome non può essere vuoto." };
 
-  const theme = {
+  const theme: Record<string, string> = {
     primaryColor: str(formData.get("primaryColor")),
     secondaryColor: str(formData.get("secondaryColor")),
     backgroundColor: str(formData.get("backgroundColor")),
     logoUrl: str(formData.get("logoUrl")),
     heroImage: str(formData.get("heroImage")),
   };
+  // Colori aggiunti in Fase 3: salvati solo se valorizzati, così restano
+  // opzionali (assenti = default della palette).
+  const textColor = str(formData.get("textColor"));
+  const sectionColor = str(formData.get("sectionColor"));
+  if (textColor) theme.textColor = textColor;
+  if (sectionColor) theme.sectionColor = sectionColor;
 
   const toggles = {
     hasKitchen: formData.get("hasKitchen") === "on",

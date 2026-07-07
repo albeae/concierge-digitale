@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Save } from "lucide-react";
 import { updateBnbGeneral } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input } from "@/components/admin/field";
@@ -15,15 +15,70 @@ const TOGGLES: { name: keyof Bnb["toggles"]; label: string }[] = [
   { name: "offersBreakfast", label: "Colazione inclusa" },
 ];
 
-const COLORS: { name: keyof Bnb["theme"]; label: string }[] = [
-  { name: "primaryColor", label: "Colore primario" },
-  { name: "secondaryColor", label: "Colore secondario" },
-  { name: "backgroundColor", label: "Sfondo" },
-];
+// Default (in hex) dei colori aggiunti in Fase 3, allineati alla palette di
+// base: così una struttura che non li ha ancora parte dall'aspetto attuale.
+const DEFAULT_TEXT_COLOR = "#3d281f";
+const DEFAULT_SECTION_COLOR = "#f7e5cf";
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+function ColorField({
+  name,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={`color-${name}`}
+        className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {label}
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`${label}: scegli il colore`}
+          value={HEX.test(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="size-9 shrink-0 cursor-pointer rounded-lg border border-border bg-card p-0.5"
+        />
+        {/* Il campo di testo porta il valore nella form (accetta anche
+            formati non-hex incollati a mano). */}
+        <Input
+          id={`color-${name}`}
+          name={name}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="font-mono text-xs"
+        />
+      </div>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export function GeneralForm({ bnb }: { bnb: Bnb }) {
   const action = updateBnbGeneral.bind(null, bnb.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  const [colors, setColors] = useState({
+    primaryColor: bnb.theme.primaryColor,
+    secondaryColor: bnb.theme.secondaryColor,
+    backgroundColor: bnb.theme.backgroundColor,
+    textColor: bnb.theme.textColor ?? DEFAULT_TEXT_COLOR,
+    sectionColor: bnb.theme.sectionColor ?? DEFAULT_SECTION_COLOR,
+  });
+  const setColor = (name: keyof typeof colors) => (value: string) =>
+    setColors((prev) => ({ ...prev, [name]: value }));
 
   return (
     <Card>
@@ -37,30 +92,41 @@ export function GeneralForm({ bnb }: { bnb: Bnb }) {
             <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Colori del tema
             </legend>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {COLORS.map((c) => (
-                <div key={c.name}>
-                  <label
-                    htmlFor={c.name}
-                    className="mb-1.5 block text-xs text-muted-foreground"
-                  >
-                    {c.label}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span
-                      aria-hidden
-                      className="size-9 shrink-0 rounded-lg border border-border"
-                      style={{ backgroundColor: bnb.theme[c.name] }}
-                    />
-                    <Input
-                      id={c.name}
-                      name={c.name}
-                      defaultValue={bnb.theme[c.name]}
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                </div>
-              ))}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ColorField
+                name="primaryColor"
+                label="Colore principale"
+                hint="Header, pulsanti, accenti forti."
+                value={colors.primaryColor}
+                onChange={setColor("primaryColor")}
+              />
+              <ColorField
+                name="secondaryColor"
+                label="Colore accento"
+                hint="Dettagli secondari (ocra)."
+                value={colors.secondaryColor}
+                onChange={setColor("secondaryColor")}
+              />
+              <ColorField
+                name="backgroundColor"
+                label="Sfondo"
+                value={colors.backgroundColor}
+                onChange={setColor("backgroundColor")}
+              />
+              <ColorField
+                name="textColor"
+                label="Colore del testo"
+                hint="Testo principale della pagina."
+                value={colors.textColor}
+                onChange={setColor("textColor")}
+              />
+              <ColorField
+                name="sectionColor"
+                label="Colore delle sezioni"
+                hint="Sfondo delle icone/chip e dei widget."
+                value={colors.sectionColor}
+                onChange={setColor("sectionColor")}
+              />
             </div>
           </fieldset>
 
