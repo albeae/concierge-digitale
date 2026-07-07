@@ -107,11 +107,11 @@ Se in futuro vuoi alzare il livello estetico, puoi sempre chiedermi mockup visiv
 
 ## 5. Roadmap di sviluppo (fasi pratiche)
 
-### Fase 1 — MVP statico a singola property (senza database)
+### Fase 1 — MVP statico a singola property (senza database) — ✅ completata
 Obiettivo: vedere e toccare con mano l'app su telefono, con dati finti scritti direttamente nel codice.
 - Homepage ospite: Wi-Fi, regole della casa, trasporti, ristoranti.
 - Nessun login, nessun database ancora.
-- Deploy su Vercel per testarla dal telefono reale via QR.
+- ✅ **Deployata su Vercel**: repo GitHub `albeae/concierge-digitale`, live su `concierge-digitale.vercel.app`. Deploy automatico a ogni `git push` su `main`. Manca ancora il test dal telefono reale via QR.
 
 ### Fase 2 — Collegamento a Supabase
 - Crea lo schema descritto sopra nel pannello Supabase (Table Editor, senza scrivere SQL a mano se preferisci).
@@ -219,7 +219,7 @@ Navigazione a tab lato client (stato in `BnbGuide`), barra fissa in basso stile 
 ### Contenuti multilingue (it/en/es) con fallback su `en`
 - Lingue supportate: **IT / EN / ES** (toggle in alto). Aggiungere una lingua = aggiungere un valore a `Locale`, un blocco a `ui` (`i18n.ts`) e i contenuti in `mock-data.ts`.
 - Il tipo `Localized<T>` (`src/types/index.ts`) è `{ en: T } & Partial<Record<Locale, T>>`: **l'inglese è sempre presente ed è la base del fallback**, le altre lingue sono opzionali. Così si può aggiungere una lingua *a poco a poco* senza tradurre subito ogni campo.
-- **Fallback su `en`** (`src/lib/localize.ts`): `resolveLocalized(content/location, locale)` fa il fallback **per-chiave**; `pick(text, locale)` fa lo stesso per i testi dei posti. Dimostrato in ES: i contenuti/chrome sono tradotti, ma i posti (solo `{it,en}`) mostrano il nome/descrizione in EN senza rompersi.
+- **Fallback su `en`** (`src/lib/localize.ts`): `resolveLocalized(content/location, locale)` fa il fallback **per-chiave**; `pick(text, locale)` fa lo stesso per i testi dei posti. Nei posti (`mock-data.ts`), il **nome** resta volutamente `{it,en}` (nome proprio, in ES ripiega su EN), mentre la **descrizione** ha anche la traduzione `es` per tutti i 7 posti.
 - L'attributo `lang` dell'`<html>` viene allineato alla lingua scelta (effetto in `bnb-guide.tsx`) per gli screen reader.
 
 ### Tema dinamico via CSS variables (ThemeProvider)
@@ -239,6 +239,7 @@ Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva d
 - Navigazione a tab con barra fissa in basso; header e nav con ombra soft.
 
 ### Note / debiti tecnici da sistemare più avanti
+- ⚠️ **Il feedback 1-3 stelle si perde**: `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Nessun database in Fase 1, quindi non c'è dove scriverlo. Da risolvere in Fase 2 con Supabase (tabella `guest_feedback` o simile) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
 - `walkingDistance` è un campo singolo (non `{it,en}`): valore neutro (es. "5 min") + suffisso localizzato lato UI.
 - `imageUrl` dei **posti** è ancora vuoto → card con emoji di categoria come placeholder (l'hero invece usa già `theme.heroImage`). `next/image` è pronto; per foto da URL esterni servirà configurare `remotePatterns`.
 - **Dati/link placeholder da collegare** (con commento nel codice): contatti host (`wa.me` / `tel:`) ora centralizzati in `src/lib/contacts.ts` (`HOST_PHONE`/`HOST_WHATSAPP`, diventeranno campi su `bnb_clients`), link Google Reviews, indirizzo della mappa (manca un campo `address` in `bnb_clients`), meteo del widget (serve un'API). L'ora locale è invece reale.
