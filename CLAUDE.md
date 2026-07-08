@@ -171,3 +171,15 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 9. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
 
 **Risolti** (2026-07-08): `image_url` dei posti non usa più `next/image` (che senza `remotePatterns` crashava la pagina) ma un `<img>` con fallback all'emoji su `onError` — nessun URL può più rompere la guest; `maximumScale: 1` rimosso dal viewport (pinch-zoom libero).
+
+---
+
+## 10. Idee proposte (backlog, non ancora iniziate)
+
+Proposte nate rileggendo il progetto, in ordine di valore/sforzo. Non anticiparle senza richiesta esplicita; sono qui perché non vadano perse.
+
+1. **Salvare il feedback 1–3 stelle** (risolve il debito n. 1). Tabella `guest_feedback` su Supabase (FK `bnb_client_id`, testo, rating, `created_at`) + policy `insert` per `anon` (solo scrittura, nessuna lettura pubblica) + sezione "Feedback ricevuti" nell'admin. È il debito col maggior costo di business: oggi l'ospite scontento crede di averti scritto e tu non ricevi nulla.
+2. **Upload immagini via Supabase Storage** — logo, hero e foto dei posti caricati dal pannello (con resize), invece di incollare URL. Risolve alla radice il rischio `image_url`; per gli URL di Storage (host noto) si può reintrodurre `next/image` con un `remotePattern` mirato e riottenere l'ottimizzazione. Per un titolare non tecnico "scatta e carica" è la differenza tra usare le foto e non usarle.
+3. **Generatore QR nell'admin** — per ogni struttura: QR scaricabile + pagina A6 stampabile "Wi-Fi & Guida" da mettere in camera. È parte della Fase 4 ma piccolo e ad alto valore: il QR è il canale di distribuzione del prodotto, oggi delegato a tool esterni.
+4. **Guardia di contrasto nel theme editor** — calcolo WCAG (rapporto ≥ 4.5:1) sulle coppie testo/sfondo, con avviso live nell'anteprima. In test è bastato mezzo minuto per creare combinazioni illeggibili: un cliente lo farà il giorno uno.
+5. **CI su GitHub Actions** — a ogni push: `tsc` + lint + build + test PGlite di schema/policy. Oggi `main` deploya in produzione senza che nessuno verifichi: trasformerebbe la quality bar (sezione 5) da disciplina volontaria a cancello automatico.
