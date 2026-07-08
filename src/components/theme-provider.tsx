@@ -13,17 +13,27 @@ interface ThemeProviderProps {
  * (`bg-terracotta`, `bg-background`, ...), quindi ogni struttura mostra la
  * propria palette senza colori fissi nel codice.
  *
- * `textColor`/`sectionColor` sono opzionali: se assenti (strutture pre-Fase 3)
- * non si sovrascrive nulla e restano i default della palette in `globals.css`.
+ * I colori opzionali (`textColor`, `primaryForeground`, ...) se assenti
+ * (strutture pre-Fase 3) non sovrascrivono nulla: restano i default della
+ * palette in `globals.css`.
  */
 export function ThemeProvider({ theme, children, className }: ThemeProviderProps) {
   const vars: Record<string, string> = {
     "--primary": theme.primaryColor,
     "--terracotta": theme.primaryColor,
     "--terracotta-strong": `color-mix(in oklab, ${theme.primaryColor}, black 12%)`,
+    // L'anello di focus segue il colore principale.
+    "--ring": theme.primaryColor,
     "--ochre": theme.secondaryColor,
     "--background": theme.backgroundColor,
   };
+
+  if (theme.primaryForeground) {
+    // Testo/icone SOPRA il colore principale: header, card Wi-Fi, selettore
+    // lingua, pulsanti brand, badge. È anche lo sfondo delle pastiglie chiare
+    // (pill lingua attiva, pulsante "Copia") che hanno testo nel colore primario.
+    vars["--primary-foreground"] = theme.primaryForeground;
+  }
 
   if (theme.textColor) {
     // Testo principale, anche dentro card e popover.

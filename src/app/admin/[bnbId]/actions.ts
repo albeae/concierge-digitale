@@ -60,6 +60,7 @@ export async function updateBnbGeneral(
   // Colori aggiunti in Fase 3: salvati solo se valorizzati, così restano
   // opzionali (assenti = default della palette).
   for (const key of [
+    "primaryForeground",
     "textColor",
     "mutedColor",
     "cardColor",

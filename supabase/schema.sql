@@ -102,6 +102,7 @@ values
     null,
     $json${
   "primaryColor": "#b85c3c",
+  "primaryForeground": "#fef9f3",
   "secondaryColor": "#d99a3c",
   "backgroundColor": "#fbf4ea",
   "textColor": "#3d281f",

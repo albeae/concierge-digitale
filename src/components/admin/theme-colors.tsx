@@ -7,6 +7,7 @@ import type { BnbTheme } from "@/types";
 // Default (hex) dei colori aggiunti in Fase 3, allineati alla palette di base:
 // una struttura che non li ha ancora parte dall'aspetto attuale.
 const DEFAULTS = {
+  primaryForeground: "#fef9f3",
   textColor: "#3d281f",
   mutedColor: "#765f53",
   cardColor: "#fffcf8",
@@ -15,6 +16,7 @@ const DEFAULTS = {
 
 type ColorState = {
   primaryColor: string;
+  primaryForeground: string;
   secondaryColor: string;
   backgroundColor: string;
   cardColor: string;
@@ -31,6 +33,7 @@ const GROUPS: {
     title: "Brand",
     fields: [
       { name: "primaryColor", label: "Colore principale", hint: "Header, pulsanti, accenti forti" },
+      { name: "primaryForeground", label: "Testo sul principale", hint: "Scritte/icone su header, Wi-Fi, lingua, badge" },
       { name: "secondaryColor", label: "Colore accento", hint: "Dettagli secondari (ocra)" },
     ],
   },
@@ -54,6 +57,7 @@ const GROUPS: {
 export function ThemeColors({ theme }: { theme: BnbTheme }) {
   const [colors, setColors] = useState<ColorState>({
     primaryColor: theme.primaryColor,
+    primaryForeground: theme.primaryForeground ?? DEFAULTS.primaryForeground,
     secondaryColor: theme.secondaryColor,
     backgroundColor: theme.backgroundColor,
     cardColor: theme.cardColor ?? DEFAULTS.cardColor,

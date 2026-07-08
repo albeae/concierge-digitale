@@ -32,6 +32,13 @@ export interface BnbTheme {
    * qui sotto.
    */
   textColor?: string;
+  /**
+   * Colore di testo e icone SOPRA il colore principale (`--primary-foreground`):
+   * nome nell'header, selettore lingua, scritte e pulsante della card Wi-Fi,
+   * pulsanti brand, badge. Di solito un colore chiaro che contrasta col
+   * principale.
+   */
+  primaryForeground?: string;
   /** Colore del testo secondario/grigio (`--muted-foreground`): didascalie, etichette. */
   mutedColor?: string;
   /** Sfondo delle card/sezioni (`--card`, `--popover`). */
