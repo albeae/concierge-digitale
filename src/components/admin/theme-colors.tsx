@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ColorPickerField } from "@/components/admin/color-picker-field";
+import { ThemePreview, type ThemeColorValues } from "@/components/admin/theme-preview";
 import type { BnbTheme } from "@/types";
 
 // Default (hex) dei colori aggiunti in Fase 3, allineati alla palette di base:
@@ -14,16 +15,7 @@ const DEFAULTS = {
   sectionColor: "#f7e5cf",
 } as const;
 
-type ColorState = {
-  primaryColor: string;
-  primaryForeground: string;
-  secondaryColor: string;
-  backgroundColor: string;
-  cardColor: string;
-  sectionColor: string;
-  textColor: string;
-  mutedColor: string;
-};
+type ColorState = ThemeColorValues;
 
 const GROUPS: {
   title: string;
@@ -77,6 +69,8 @@ export function ThemeColors({ theme }: { theme: BnbTheme }) {
           Clicca un quadratino per aprire il selettore, o incolla un codice hex.
         </p>
       </div>
+
+      <ThemePreview colors={colors} />
 
       {GROUPS.map((group) => (
         <fieldset key={group.title} className="space-y-2.5">
