@@ -1,4 +1,7 @@
-import Image from "next/image";
+"use client";
+
+/* eslint-disable @next/next/no-img-element */
+import { useState } from "react";
 import { Footprints, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -25,16 +28,22 @@ export function PlaceCard({ place, locale, t }: PlaceCardProps) {
   const name = pick(place.name, locale);
   const description = pick(place.description, locale);
 
+  // L'URL immagine lo inserisce il titolare a mano: può essere assente, non
+  // valido o irraggiungibile. Usiamo un <img> semplice (non `next/image`, che
+  // richiederebbe `remotePatterns` per ogni host e altrimenti FAREBBE CRASHARE
+  // la pagina ospite) e, se il caricamento fallisce, ripieghiamo sull'emoji.
+  const [imageOk, setImageOk] = useState(Boolean(place.imageUrl));
+
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <div className="relative flex h-32 items-center justify-center bg-secondary">
-        {place.imageUrl ? (
-          <Image
+        {imageOk ? (
+          <img
             src={place.imageUrl}
             alt={name}
-            fill
-            sizes="(max-width: 448px) 100vw, 448px"
-            className="object-cover"
+            loading="lazy"
+            onError={() => setImageOk(false)}
+            className="absolute inset-0 size-full object-cover"
           />
         ) : (
           <span className="text-5xl opacity-80" aria-hidden>

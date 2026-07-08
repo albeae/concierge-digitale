@@ -38,7 +38,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Niente `maximumScale`/`userScalable`: il pinch-zoom resta libero — l'utenza
+  // sono turisti che devono poter ingrandire Wi-Fi, regole e indirizzi.
   viewportFit: "cover",
   themeColor: BRAND.primary,
 };

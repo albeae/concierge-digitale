@@ -161,13 +161,13 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 ## 9. Debiti tecnici correnti (in ordine di rischio)
 
 1. ⚠️ **Feedback 1–3 stelle perso**: `review-module.tsx` mostra "Grazie!" e scarta il testo. Serve una tabella `guest_feedback` + policy insert per anon + vista in admin. Finché non c'è, quel canale NON raccoglie nulla.
-2. ⚠️ **`image_url` dei posti è una trappola**: l'admin permette di inserirlo, ma `next.config.ts` non ha `remotePatterns` → un URL esterno fa **crashare la card** lato ospite (`next/image` rifiuta host non configurati). Se un titolare lo compila, la pagina si rompe. Da risolvere prima di dare l'admin a un cliente vero (Storage Supabase o `remotePatterns` + fallback).
-3. **Colori del tema non validati server-side**: `updateBnbGeneral` salva qualsiasi stringa; un valore malformato produce CSS variables spazzatura (tema rotto, non un exploit: React le confina nel valore della proprietà). Aggiungere validazione `#rrggbb` nell'action.
-4. **`maximumScale: 1` nel viewport** blocca il pinch-zoom: contrario al principio "turisti stanchi senza occhiali". Valutare la rimozione.
-5. **Link Google Reviews placeholder** (`placeid=PLACEHOLDER` in `review-module.tsx`): andrà per-struttura nel DB.
-6. **Meteo finto** nel widget Home (l'orologio invece è reale). Serve un'API.
-7. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
-8. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
-9. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
-10. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
-11. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
+2. **Colori del tema non validati server-side**: `updateBnbGeneral` salva qualsiasi stringa; un valore malformato produce CSS variables spazzatura (tema rotto, non un exploit: React le confina nel valore della proprietà). Aggiungere validazione `#rrggbb` nell'action.
+3. **Link Google Reviews placeholder** (`placeid=PLACEHOLDER` in `review-module.tsx`): andrà per-struttura nel DB.
+4. **Meteo finto** nel widget Home (l'orologio invece è reale). Serve un'API.
+5. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
+6. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
+7. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
+8. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
+9. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
+
+**Risolti** (2026-07-08): `image_url` dei posti non usa più `next/image` (che senza `remotePatterns` crashava la pagina) ma un `<img>` con fallback all'emoji su `onError` — nessun URL può più rompere la guest; `maximumScale: 1` rimosso dal viewport (pinch-zoom libero).
