@@ -1,289 +1,173 @@
 @AGENTS.md
 
-# Concierge Digitale — Piano di progetto per l'MVP
+# Concierge Digitale — Manuale operativo
 
-Micro SaaS per B&B/affittacamere di Roma. PWA mobile-first via QR Code, dati gestiti su Supabase, deploy su Vercel.
+Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la guida della struttura (Wi-Fi, regole, trasporti, posti consigliati); il titolare gestisce i contenuti da un pannello protetto. PWA mobile-first, dati su Supabase, deploy su Vercel (`concierge-digitale.vercel.app`, repo GitHub `albeae/concierge-digitale`, deploy automatico a ogni push su `main` — **`main` è produzione**).
 
----
-
-## 0. Principio guida: parti piccolo, poi generalizza
-
-Con zero esperienza, l'errore più comune è voler costruire subito il "SaaS completo" (multi-tenant, pagamenti, onboarding automatico). Non farlo. Il piano sotto è ordinato così:
-
-1. **Prima**: un'app funzionante per **un solo B&B** (magari il tuo, o un amico disposto a fare da tester), dati anche inseriti a mano su Supabase.
-2. **Poi**: generalizzi a multi-tenant (più B&B sulla stessa app).
-3. **Solo alla fine**: pannello di abbonamento/pagamento per vendere il prodotto ad altri.
-
-Questo ti fa validare l'idea con un cliente reale prima di investire tempo nell'infrastruttura SaaS completa.
+**Chi è l'utente**: il proprietario del progetto non è un programmatore. Spiega le scelte in italiano semplice, senza gergo non necessario; esegui e verifica tu invece di chiedere a lui di farlo; quando serve un passo manuale (es. SQL su Supabase), scrivi istruzioni passo-passo a fine risposta.
 
 ---
 
-## 1. Strumenti da preparare (Fase 0 — setup, ~1 giorno)
+## 1. Mappa del progetto
 
-| Cosa | A cosa serve | Note |
+| Percorso | Responsabilità |
+|---|---|
+| `src/app/[bnbId]/page.tsx` | Pagina ospite (server component, ISR 300s, `generateStaticParams` dal DB) |
+| `src/app/page.tsx` | Root: redirect al primo B&B (ISR 300s; 404 se DB vuoto) |
+| `src/app/admin/**` | Area titolare: login, dashboard, editor (`force-dynamic`, `robots: noindex`) |
+| `src/app/admin/actions.ts` | Server action `login`/`logout` |
+| `src/app/admin/[bnbId]/actions.ts` | Server action di scrittura (dati generali, contenuti, posti) |
+| `src/proxy.ts` | "Middleware" di Next 16 (si chiama proxy): refresh sessione + redirect, solo `/admin/:path*` |
+| `src/lib/supabase.ts` | Client **anon puro** — SOLO pagine ospite (lettura) |
+| `src/lib/supabase-server.ts` | Client **server con cookie** — SOLO area admin (sessione titolare) |
+| `src/lib/data.ts` | Data layer pubblico: `getBnb` / `getBnbIds` / `getPlaces` (async, `cache()`) |
+| `src/lib/auth.ts` | DAL admin: `getSessionUser`, `requireUser`, `getOwnedBnb(s)`, `getOwnedBnbPlaces` |
+| `src/lib/bnb-mappers.ts` | UNICO punto di mappatura righe DB (snake_case) ↔ tipi dominio (camelCase) + elenchi colonne |
+| `src/lib/localize.ts` | Fallback lingua per-chiave su `en` — **non modificare la logica** |
+| `src/lib/i18n.ts` | Etichette UI fisse in it/en/es (`UiStrings`) |
+| `src/lib/contacts.ts` | Solo il 112 e gli helper `telUrl`/`whatsappUrl` (i contatti host vivono nel DB) |
+| `src/lib/brand.ts` / `recycling.ts` | Costanti: colori chrome PWA / colori cestini AMA (whitelist hex) |
+| `src/types/index.ts` | Tipi di dominio (`Bnb`, `Place`, `Localized<T>`, `BnbTheme`, …) |
+| `src/components/*.tsx` | UI ospite (BnbGuide + tab Home/Esplora/Info) |
+| `src/components/admin/*.tsx` | UI pannello (form, editor colori con anteprima live, picker) |
+| `src/components/theme-provider.tsx` | Inietta il tema del B&B come CSS variables |
+| `supabase/schema.sql` | Fase 2: tabelle + RLS lettura + seed (applicato ✅) |
+| `supabase/phase-3-auth.sql` | Fase 3: policy di scrittura titolare (applicato ✅) |
+| `public/sw.js`, `src/app/manifest.ts` | PWA: service worker (solo produzione) + manifest |
+
+---
+
+## 2. Architettura dati (i due binari)
+
+**Binario ospite (pubblico, statico):** `page.tsx` → `data.ts` → `supabase.ts` (anon) → RLS `select using (true)`. Le pagine sono statiche con `revalidate = 300`: restano su CDN e si rigenerano al massimo ogni 5 minuti. Su errore DB il data layer logga e restituisce vuoto → `notFound()`; la build non fallisce mai per un DB vuoto.
+
+**Binario titolare (protetto, dinamico):** richiesta → `proxy.ts` (refresh sessione + redirect) → pagina admin `force-dynamic` → `auth.ts` (`requireUser` + filtro `owner_id`) → server action → `supabase-server.ts` (JWT nei cookie) → RLS `auth.uid() = owner_id` → `revalidatePath('/[bnbId]')`.
+
+**Tre livelli di difesa, sempre tutti e tre:** proxy (ottimistico) + `requireUser`/`getOwnedBnb` nelle pagine e azioni + RLS nel DB. Nessuno dei tre da solo è sufficiente.
+
+**Schema DB** (dettagli e commenti in `supabase/schema.sql`):
+- `bnb_clients`: `id` = slug URL (testo), `owner_id` uuid nullable → `auth.users` (non univoco: un titolare, più strutture), `theme`/`toggles`/`content`/`location` jsonb, `address`, `host_phone`, `host_whatsapp`, `created_at`. Wi-Fi/regole/trasporti vivono DENTRO i jsonb: niente tabelle nuove senza necessità reale.
+- `restaurants`: FK `bnb_client_id` (cascade), `category` con check (`ristorante|bar|servizio`), `name`/`description` jsonb localizzati, `walking_distance`, `image_url`, `google_maps_url`, `sort_order` (l'ordine lista è SEMPRE esplicito, mai affidato al DB).
+- La **anon key è l'unica chiave disponibile**: il codice non può fare DDL. Ogni modifica di schema = nuovo file `supabase/*.sql` che l'utente esegue a mano nell'SQL Editor.
+
+---
+
+## 3. Convenzioni del repo
+
+**Lingua.** Codice, commenti, commit, testi admin: italiano. Contenuti ospite: it/en/es con `en` base obbligatoria. Termini tecnici in inglese dove naturale.
+
+**Commit.** Conventional in italiano con la fase: `feat(fase-3): …`, `fix(fase-3): …`, `docs: …`. Commit logici separati (SQL / codice / docs). Chiudi con `Co-Authored-By: Claude <modello> <noreply@anthropic.com>`. Branch per fase (`fase-N-nome`); **mai push senza che l'utente lo chieda** (`main` = produzione).
+
+**Colori e token.** Nessun colore/ombra/raggio scritto a mano nei componenti: solo utility Tailwind mappate su CSS variables (`bg-terracotta`, `text-primary-foreground`, `shadow-soft`, `rounded-2xl`…). Il tema per-struttura è iniettato da `ThemeProvider` in tre famiglie: identità (`--primary`/`--terracotta`/`--terracotta-strong`/`--ring`, `--ochre`), sfondi (`--background`, `--card`/`--popover`, `--secondary`/`--accent`), testo (`--foreground`/`--card-foreground`/`--popover-foreground`, `--muted-foreground`, `--primary-foreground`). I 5 colori opzionali (`primaryForeground`, `textColor`, `mutedColor`, `cardColor`, `sectionColor`) se assenti non sovrascrivono nulla. Whitelist hex: `brand.ts`, `recycling.ts`, `DEFAULTS` in `theme-colors.tsx` (default calcolati per conversione da oklch, non a occhio).
+
+**Localizzazione.** `Localized<T> = { en: T } & Partial<Record<Locale, T>>`. `en` è sempre presente ed è la base; il fallback è per-chiave (`resolveLocalized`) o per-testo (`pick`). Nel salvataggio: `en` sempre scritto, `it`/`es` omessi se completamente vuoti. Aggiungere una lingua = 1 valore in `Locale` + 1 blocco in `ui` (`i18n.ts`) + contenuti nel DB.
+
+**Dati.** Tipi di dominio camelCase; righe DB snake_case; conversione ed elenchi colonne SOLO in `bnb-mappers.ts`. Query pubbliche in `data.ts` (avvolte in `cache()` di React), query admin in `auth.ts`.
+
+**Scritture.** Solo da server action admin, sempre con questo schema in quest'ordine: (1) `getOwnedBnb(bnbId)` → errore se null; (2) normalizzazione input (`str()`, validazioni, niente fiducia nel client); (3) scrittura col client server; (4) `revalidatePath`. Stato di ritorno `ActionState` (`{ok:true,message}` / `{ok:false,error}`) con messaggi in italiano comprensibili a un non tecnico.
+
+**SQL.** Un file per fase in `supabase/`, rieseguibile senza danni (`on conflict do nothing`, solo `create policy` additive…), dollar-quoting per i jsonb, commenti che spiegano il perché. Prima del commit va **eseguito davvero** su PGlite (Postgres WASM, `npm i @electric-sql/pglite` nello scratchpad) con stub Supabase: `create schema auth; create table auth.users (id uuid primary key); create role anon; create role authenticated;` — poi assertion su vincoli, policy e, per le policy di scrittura, prove con `set role` / `auth.uid()` stubbato.
+
+**UI.** Mobile-first (l'ospite è al telefono): tap target grandi, card `rounded-3xl`, ombre morbide dai token. Rendering condizionale (non nascondere via CSS). `min-h-*` sui contenitori di testo, mai altezze fisse. Emoji come icone di dominio (regole, trasporti), lucide per la UI.
+
+---
+
+## 4. Errori tipici (nome → regola che li previene)
+
+1. **Il Next.js che ricordi non è questo.** Next 16 ha breaking changes: il middleware si chiama `src/proxy.ts` (export `proxy`), `params` è una `Promise` (sempre `await params`), niente `cacheComponents` (vale il modello ISR classico). Regola: se un'API Next non compare già nel repo, leggi prima la doc locale in `node_modules/next/dist/docs/`.
+2. **Il colore scritto a mano.** Un hex nel markup rompe il theming per-struttura. Regola: ogni colore passa da un token; se il token non esiste, aggiungilo in `globals.css` + `ThemeProvider` + (se il titolare deve poterlo cambiare) selettore in `theme-colors.tsx`. Eccezioni: solo la whitelist della sezione 3.
+3. **Il bianco che sparisce.** `text-white`/`bg-white` diventa illeggibile con temi chiari; testo `--foreground` su sfondi scuri sparisce. Regola: usa sempre coppie accoppiate (`bg-X` + `text-X-foreground`); i pulsanti outline della guest usano bordo+testo `terracotta`, MAI il variant `outline` nudo (eredita colori di pagina). Unica eccezione `text-white`: le icone dei cestini AMA.
+4. **La lingua riempita di vuoti.** Salvare `it: ""` uccide il fallback (l'ospite vede campi vuoti invece dell'inglese). Regola: `en` sempre completo; `it`/`es` si omettono del tutto se vuoti; `localize.ts` non si tocca.
+5. **Il client mescolato.** Se una pagina ospite importa `supabase-server.ts` (o `next/headers`) diventa dinamica e perde ISR/CDN. Regola: guest → `supabase.ts`; admin → `supabase-server.ts`. Mai incrociarli.
+6. **La scrittura dal posto sbagliato.** Il client anon non può scrivere (RLS) e non deve provarci. Regola: ogni scrittura è una server action admin con i 4 passi della sezione 3 (ownership → normalizza → scrivi → revalida).
+7. **Il DDL impossibile.** `create table` via API fallisce in silenzio concettuale: c'è solo la anon key. Regola: modifiche di schema = nuovo file `supabase/*.sql` + istruzioni manuali per l'utente + validazione PGlite.
+8. **La difesa unica.** "Tanto c'è il proxy" (o "tanto c'è la RLS") è come si creano i buchi. Regola: tutti e tre i livelli, sempre; ogni nuova pagina/azione admin chiama `requireUser`/`getOwnedBnb` anche se il proxy già filtra.
+9. **La modifica che non si vede.** Senza `revalidatePath` la pagina ospite resta cache-ata fino a 5 minuti e il titolare crede che il salvataggio sia rotto. Regola: ogni scrittura termina con `refreshGuest(bnbId)`.
+10. **Il 500 evitabile.** Un DB vuoto/spento non è un'eccezione: è lo stato normale prima dell'apply SQL. Regola: nel data layer pubblico ogni errore → `console.error` + ritorno vuoto → la pagina fa `notFound()`; `getBnbIds()` che fallisce restituisce `[]` e la build passa.
+11. **Lo snake nel dominio.** `host_phone` che gira nei componenti = refactoring doloroso. Regola: la conversione avviene una volta sola in `bnb-mappers.ts`; i componenti vedono solo camelCase.
+12. **L'altezza che taglia.** `h-5` fisso + `overflow-hidden` su un badge taglia il testo in verticale (successo davvero). Regola: `min-h-*` sui contenitori di testo; niente `overflow-hidden` dove il contenuto può crescere.
+13. **Verificato a occhio.** Uno screenshot non dimostra un colore né un'altezza. Regola: verifica con misure — `preview_inspect`/`getComputedStyle`, status HTTP, `scrollHeight === clientHeight` — e riporta i valori. I default hex derivati dalla palette oklch si calcolano con la conversione matematica.
+14. **Il segreto nel repo.** Regola: mai credenziali/chiavi nei file versionati (`.env*` è gitignorato); le credenziali di test admin le fornisce l'utente in sessione, non scriverle in CLAUDE.md o nei commit.
+15. **La porta dell'utente.** La 3000 spesso è occupata dal `npm run dev` dell'utente che sta testando. Regola: mai uccidere processi non tuoi; usa il preview (launch.json ha `autoPort`) e se non parte, dillo e vai avanti con verifiche non-browser.
+16. **La fase saltata.** Il principio del progetto è "parti piccolo, poi generalizza". Regola: non anticipare infrastruttura delle fasi future (multi-tenant self-service, pagamenti) se non richiesto; una fase alla volta, testata.
+
+---
+
+## 5. Quality bar (criteri verificabili, non aggettivi)
+
+Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
+
+- [ ] `npx tsc --noEmit` → exit 0.
+- [ ] `npm run lint` → exit 0, zero warning.
+- [ ] `npm run build` → exit 0 **e** nel riepilogo route: `/` e `/[bnbId]` statiche (○/●) con `Revalidate: 5m`; le route `/admin*` dinamiche (ƒ); riga `Proxy (Middleware)` presente.
+- [ ] `grep -rn -E "#[0-9a-fA-F]{6}" src/components src/app --include="*.tsx"` → risultati solo nei file whitelist (`theme-colors.tsx`); `grep -rn "text-white\|bg-white" src/components` → solo `rules-card.tsx` (cestini).
+- [ ] Ogni server action di scrittura contiene sia `getOwnedBnb(` sia `refreshGuest(`/`revalidatePath(`.
+- [ ] SQL nuovo: eseguito su PGlite con stub auth/ruoli; tutte le assertion stampano ✓; rieseguirlo due volte non genera errori né duplicati.
+- [ ] Se il DB è irraggiungibile o vuoto: `/` e `/casa-rossa` rispondono **404** (mai 500) e la build completa comunque.
+- [ ] UI toccata: verificata nel preview a viewport mobile (375px) con almeno una misura oggettiva (computed style, conteggio elementi, status); niente scroll orizzontale (`document.documentElement.scrollWidth <= window.innerWidth`).
+- [ ] i18n toccata: con lingua ES su un campo senza traduzione si vede il testo EN, mai stringa vuota.
+- [ ] Admin toccato: login reale nel preview (credenziali dall'utente), salvataggio eseguito e dato riletto che corrisponde; ripristinato l'eventuale valore di test prima di chiudere.
+- [ ] `git status --short` vuoto a fine lavoro; messaggi commit conformi alla sezione 3.
+- [ ] Se lo stato di una fase è cambiato: sezione 7 di questo file aggiornata nello stesso giro di commit.
+
+---
+
+## 6. Flusso di lavoro
+
+1. **Branch per fase**, nomi `fase-N-descrizione`. Lavoro corrente committato lì; l'utente rivede e mergia lui.
+2. **Ordine dei commit**: prima l'SQL (se c'è), poi il codice, poi i docs — ognuno autonomo e con build verde.
+3. **Verifica end-to-end quando possibile**: preview → login (se serve, chiedi le credenziali) → azione reale → misura → eventuale ripristino. Quando il preview non può partire, dichiara cosa NON hai potuto verificare.
+4. **Passi manuali**: qualsiasi cosa l'utente debba fare a mano (SQL Editor, pannello Supabase, merge) va elencata a fine risposta, numerata, con i comandi/SQL pronti da incollare.
+5. **Documentazione**: CLAUDE.md è il registro operativo; aggiornalo quando cambiano architettura, convenzioni o stato fasi — non per ogni singolo fix.
+
+---
+
+## 7. Roadmap e stato
+
+| Fase | Contenuto | Stato |
 |---|---|---|
-| Account [GitHub](https://github.com) | Versionare il codice | Gratuito |
-| Account [Vercel](https://vercel.com) | Hosting/deploy | Collegalo a GitHub |
-| Account [Supabase](https://supabase.com) | Database + autenticazione | Piano gratuito sufficiente per l'MVP |
-| Node.js (versione LTS) | Eseguire il progetto in locale | Scarica da nodejs.org |
-| Un editor di codice | Scrivere/leggere il codice | VS Code è lo standard |
-| **Claude Code** | Scrivere il codice per te | Vedi sezione 8 — è lo strumento chiave data la tua situazione |
+| 1 | MVP statico singola property, PWA base, deploy Vercel | ✅ completata |
+| 2 | Supabase: schema + RLS lettura + seed; frontend legge dal DB; ISR 300s | ✅ completata e applicata |
+| 3 | Auth titolare + pannello admin + policy scrittura + editor tema completo | ✅ completata e applicata (login funzionante, `owner_id` collegato) |
+| 4 | Multi-tenancy: landing/elenco su `/`, generazione QR per struttura | ⬜ prossima (il routing `/[slug]` esiste già) |
+| 5 | PWA avanzata: già fatti manifest+SW in Fase 1; resta test offline reale su device | ◐ parziale |
+| 6 | Rifinitura: loading states, errori comprensibili, analytics leggero | ⬜ |
+| 7 | Test reale con QR in camera + primo cliente pilota | ⬜ |
+| 8 | SaaS: registrazione self-service, Stripe, onboarding automatico | ⬜ (non anticipare) |
 
-Non serve altro per iniziare. Niente Figma, niente corsi propedeutici: si impara facendo, con Claude che scrive il codice e ti spiega cosa fa.
+**Provisioning titolare (finché non c'è la Fase 8):** utente creato a mano in Authentication → Users, poi `update public.bnb_clients set owner_id = '<uuid>' where id = '<slug>';` nell'SQL Editor. Istruzioni complete in fondo a `phase-3-auth.sql`.
 
----
-
-## 2. Stack tecnico consigliato
-
-- **Frontend**: **Next.js** (framework React) — è quello con il supporto migliore su Vercel e con plugin pronti per trasformarlo in PWA.
-- **Stile**: **Tailwind CSS** + **shadcn/ui** — componenti già pronti (bottoni, card, form) esteticamente puliti, così non devi "disegnare" da zero.
-- **Database**: **Supabase** (Postgres) — con autenticazione integrata per il login dei titolari B&B, storage per loghi/immagini, e **Row Level Security (RLS)** per garantire che ogni titolare veda solo i propri dati.
-- **PWA**: manifest + service worker (libreria `next-pwa` o Workbox) per installabilità e funzionamento offline parziale.
-- **Deploy**: Vercel, collegato al repository GitHub — ogni `git push` pubblica automaticamente.
+**Il QR** codifica solo l'URL `https://dominio/<slug>`: tutta la logica è nel routing dinamico + query per slug.
 
 ---
 
-## 3. Progettazione del database (Supabase)
+## 8. Registro decisioni (il perché delle scelte)
 
-Questa è la parte concettualmente più importante: se lo schema è fatto bene, il resto scorre.
-
-### Tabelle principali
-
-> **Schema implementato in Fase 2**: l'SQL completo (tabelle + RLS + seed) è in
-> **`supabase/schema.sql`**, da eseguire nell'SQL Editor di Supabase. La vecchia
-> tabella `properties` + le tabelle `wifi_info` / `house_rules` /
-> `transport_info` separate sono state sostituite da un'unica tabella
-> **`bnb_clients`** con colonne `jsonb`, più `restaurants` per i posti.
-
-**`bnb_clients`** (una riga per ogni B&B — è il "cliente" del SaaS)
-- `id` (testo, slug usato nell'URL — es. `casa-rossa`, `villa-borghese`)
-- `name`
-- `owner_id` (uuid **nullable**, FK verso `auth.users`. **Non univoco**: più righe possono condividere lo stesso `owner_id`, così un titolare potrà gestire più strutture senza cambiare schema. `NULL` finché non c'è il login: si valorizza in Fase 3 con Supabase Auth)
-- `theme` (jsonb: `primaryColor`, `secondaryColor`, `backgroundColor`, `logoUrl`, `heroImage`, più i colori opzionali aggiunti in Fase 3 — `primaryForeground`, `textColor`, `mutedColor`, `cardColor`, `sectionColor` — assenti = default della palette base, vedi sezione 9)
-- `toggles` (jsonb: `hasKitchen`, `hasParking`, `offersBreakfast`)
-- `content` (jsonb bilingue `{ it, en, es? }`: `welcomeMessage`, `wifiNetworkName`, `wifiPassword`, `checkIn`, `checkOut`, `houseRules[]`)
-- `location` (jsonb bilingue `{ it, en, es? }`: `airport`, `train`, `ztl`)
-- `address` (testo, indirizzo "neutro" per l'embed della mappa in Info)
-- `host_phone` / `host_whatsapp` (testo, contatti host per i bottoni `tel:` / `wa.me`)
-- `created_at`
-
-Wi-Fi, regole della casa e trasporti vivono **dentro** i jsonb `content`/`location`: niente tabelle dedicate finché non serve un editing granulare (in quel caso si potranno estrarre `house_rules` / `transport_info` con FK `bnb_client_id`).
-
-**`restaurants`** (posti consigliati — tabella separata, FK verso il B&B)
-- `id` (testo; default `gen_random_uuid()::text`, il seed usa gli id parlanti del mock)
-- `bnb_client_id` (FK → `bnb_clients.id`, `on delete cascade`)
-- `category` (`ristorante` | `bar` | `servizio`, con `check` constraint)
-- `name` (jsonb `{ it, en }`)
-- `description` (jsonb `{ it, en, es }` — la citazione/raccomandazione dell'host)
-- `walking_distance` (es. `"5 min"`; il suffisso "a piedi/walk" è localizzato lato UI)
-- `image_url`
-- `google_maps_url`
-- `sort_order` (intero: ordine di presentazione nella lista, il DB da solo non garantirebbe un ordine stabile)
-- `created_at`
-
-**`users`** — gestita automaticamente da Supabase Auth (non la crei tu), collegata a `bnb_clients.owner_id`.
-
-### Sicurezza: Row Level Security (RLS)
-
-Fondamentale in un SaaS multi-tenant:
-- Il **titolare** (autenticato) può leggere/scrivere **solo** le righe di `bnb_clients` dove `owner_id` è il suo, e i `restaurants` con `bnb_client_id` di sua proprietà.
-- L'**ospite** (pubblico, senza login) può **solo leggere** — nessun accesso in scrittura.
-
-**Fase 2** (in `supabase/schema.sql`): RLS abilitata su entrambe le tabelle con
-una sola policy `for select` per `anon`/`authenticated` (lettura pubblica).
-
-**Fase 3** (in `supabase/phase-3-auth.sql`): aggiunte le policy di **scrittura**
-per il titolare autenticato — `update` su `bnb_clients` dove `auth.uid() =
-owner_id` (con `with check` che impedisce di cedere la struttura a un altro
-owner) e `for all` (CRUD) su `restaurants` dei propri B&B. La lettura pubblica
-resta invariata (le policy si sommano in OR). L'ospite continua a leggere senza
-login e non può scrivere. Provisioning manuale del titolare: si crea l'utente in
-Supabase Auth e si valorizza `owner_id` a mano (istruzioni in fondo al file SQL);
-la registrazione self-service è rinviata alla Fase 8.
+- **Una tabella `bnb_clients` con jsonb** invece di tabelle separate per wifi/regole/trasporti: meno join, editing granulare rimandato a quando servirà davvero.
+- **`id` = slug testuale** (es. `casa-rossa`): è l'URL del QR; niente uuid per le strutture.
+- **ISR 300s invece di SSR**: le pagine ospite reggono traffico da CDN e sopravvivono a Supabase spento; la freschezza immediata è garantita da `revalidatePath` dopo ogni salvataggio admin.
+- **Client anon separato dal client cookie**: mantiene statiche le pagine ospite (vedi errore n. 5).
+- **Mapper centralizzati** (`bnb-mappers.ts`): un solo posto per colonne e conversioni, condiviso da guest e admin.
+- **Tema come CSS variables iniettate** invece di classi condizionali: il tema arriva dal DB a runtime, i componenti non sanno nulla dei colori.
+- **8 colori del tema, 5 opzionali**: retrocompatibilità totale con le righe create prima (assente = default palette in `globals.css`).
+- **Editor colori** (`theme-colors.tsx` + `color-picker-field.tsx` + `theme-preview.tsx`): gruppi Identità/Sfondi/Testo, picker react-colorful in popover, anteprima live sticky che riusa le stesse CSS variables del frontend vero.
+- **Contenuti multilingua nell'editor**: lo stato it/en/es viaggia in un campo hidden `payload` JSON; il server normalizza e applica la regola "en sempre, altre solo se non vuote".
+- **`sort_order` esplicito sui posti**: l'ordine è una scelta dell'host, non un artefatto del DB.
+- **Stack**: Next.js 16 (App Router, Turbopack), Tailwind v4, shadcn/ui (base-nova, icone lucide), sonner per i toast (riscritto senza next-themes), PWA con SW network-first (`public/sw.js`, solo produzione).
+- **Manifest/chrome PWA**: colori statici da `brand.ts` (il manifest è unico per l'app, non per-tenant).
 
 ---
 
-## 4. Design senza esperienza di design
+## 9. Debiti tecnici correnti (in ordine di rischio)
 
-Non ti serve Figma per l'MVP. Il modo più efficiente con le tue risorse:
-
-1. **Definisci un moodboard minimo a parole** (non serve disegnarlo): es. "palette calda, terracotta/ocra, richiami a Roma, font sans-serif pulito, bottoni grandi per uso da smartphone in mano".
-2. **Fai generare l'interfaccia direttamente in codice** da Claude (qui in chat o in Claude Code) usando Tailwind + shadcn/ui, e poi la correggi a parole: "rendi i bottoni più arrotondati", "usa toni più caldi", "il testo è troppo piccolo per un turista senza occhiali".
-3. Principi da rispettare data la tua utenza (turisti, spesso stanchi, con poco tempo, magari senza dati mobili):
-   - Font grandi, alto contrasto, tocco facile (bottoni grandi).
-   - Zero fronzoli: password Wi-Fi e regole della casa devono essere visibili **entro un tap** dall'apertura.
-   - Funzionamento offline per le informazioni essenziali (vedi sezione PWA).
-
-Se in futuro vuoi alzare il livello estetico, puoi sempre chiedermi mockup visivi qui in chat prima di implementarli.
-
----
-
-## 5. Roadmap di sviluppo (fasi pratiche)
-
-### Fase 1 — MVP statico a singola property (senza database) — ✅ completata
-Obiettivo: vedere e toccare con mano l'app su telefono, con dati finti scritti direttamente nel codice.
-- Homepage ospite: Wi-Fi, regole della casa, trasporti, ristoranti.
-- Nessun login, nessun database ancora.
-- ✅ **Deployata su Vercel**: repo GitHub `albeae/concierge-digitale`, live su `concierge-digitale.vercel.app`. Deploy automatico a ogni `git push` su `main`. Manca ancora il test dal telefono reale via QR.
-
-### Fase 2 — Collegamento a Supabase — ✅ completata (lato codice)
-- ✅ Schema + RLS + seed scritti in **`supabase/schema.sql`** (da eseguire una volta nell'SQL Editor di Supabase — con la sola anon key il codice non può creare tabelle).
-- ✅ Frontend che legge da Supabase invece che dal codice: `src/lib/supabase.ts` (client) + `src/lib/data.ts` (query async), `src/lib/mock-data.ts` eliminato.
-- ⏳ **Passo manuale rimasto**: eseguire `supabase/schema.sql` nell'SQL Editor del progetto Supabase; finché non è fatto, l'app risponde 404 (senza rompersi) e si auto-ripara entro ~5 minuti grazie all'ISR.
-
-### Fase 3 — Pannello admin per il titolare — ✅ completata (lato codice)
-- ✅ Pagina di login (Supabase Auth: email + password) su **`/admin/login`**, protezione route via **`src/proxy.ts`** (in Next 16 il middleware si chiama "proxy").
-- ✅ Area **`/admin`** protetta: dashboard con le strutture possedute + editor completo per ognuna (dati generali, contenuti multilingua it/en/es con regole della casa, trasporti, CRUD posti).
-- ✅ Policy di scrittura RLS in **`supabase/phase-3-auth.sql`** (da applicare a mano dopo `schema.sql`).
-- ⏳ **Passi manuali rimasti**: (1) eseguire `supabase/phase-3-auth.sql` nell'SQL Editor; (2) creare l'utente titolare in Authentication → Users; (3) collegarlo con `update bnb_clients set owner_id = '<uuid>' where id = 'casa-rossa';`. Poi il titolare fa login e **gestisce da solo i propri dati**.
-
-### Fase 4 — Multi-tenancy
-- Routing dinamico: `tuosito.it/[slug]` mostra i dati della property corrispondente.
-- Generazione del QR Code per ogni property (libreria `qrcode`, oppure un tool online gratuito, puntando all'URL con lo slug).
-
-### Fase 5 — Funzionalità PWA vera e propria
-- `manifest.json` (nome, icone, colore tema) → l'ospite può "installare" l'app sulla home del telefono.
-- Service worker → le info essenziali restano visibili anche senza connessione dopo la prima visita (utile in camera con Wi-Fi che si disconnette).
-
-### Fase 6 — Rifinitura
-- Stati di caricamento, messaggi di errore comprensibili.
-- Eventuale analytics leggero (es. Vercel Analytics) per mostrare al titolare B&B quante persone hanno visitato la pagina — è un ottimo argomento di vendita.
-
-### Fase 7 — Test reale e primo cliente pilota
-- Stampa il QR, mettilo in una camera vera, testa con ospiti reali.
-- Raccogli feedback, correggi.
-
-### Fase 8 — Livello SaaS (dopo la validazione)
-- Pagina di registrazione self-service per nuovi B&B.
-- Pagamenti ricorrenti (Stripe) per l'abbonamento mensile.
-- Onboarding automatico (creazione property + slug + QR generato in automatico).
-
----
-
-## 6. Cosa scansiona davvero l'ospite
-
-Il QR Code non è "intelligente": è solo un'immagine che codifica un URL, es.:
-```
-https://tuoconcierge.it/casa-rossa
-```
-Quando l'ospite lo scansiona, il telefono apre quell'indirizzo nel browser (o nella PWA se già installata), che a sua volta interroga Supabase per i dati di `casa-rossa` e li mostra. Tutta la "magia" è nel routing dinamico lato Next.js + nella query a Supabase filtrata per slug.
-
----
-
-## 7. Modello di business (per quando generalizzi)
-
-Qualche domanda a cui converrà rispondere prima della Fase 8:
-- Prezzo per B&B (abbonamento mensile fisso? scalabile per numero di camere?).
-- Chi genera/stampa il QR: tu o il titolare in autonomia dal pannello?
-- Serve un dominio/sottodominio per B&B (es. `casa-rossa.tuoconcierge.it`) o basta un path (`tuoconcierge.it/casa-rossa`)? Il path è molto più semplice da gestire con Vercel.
-
----
-
-## 8. Come useresti concretamente Claude in questo progetto
-
-Dato che non hai esperienza di programmazione, il modo più efficace per costruire davvero il codice è **Claude Code** (l'app agentica di Anthropic per sviluppatori): scrive, testa e corregge i file del progetto per te, lavorando direttamente sui file sul tuo computer o collegato a GitHub. In questa chat invece puoi:
-- Fare pianificazione, come stiamo facendo ora.
-- Progettare schema database e wireframe testuali.
-- Farmi rivedere pezzi di codice o dubbi puntuali.
-
-Il flusso pratico consigliato: apri Claude Code nella cartella del progetto e gli chiedi, fase per fase, di implementare esattamente i punti della roadmap sopra (es. "crea un progetto Next.js con Tailwind e shadcn/ui, poi implementa la homepage ospite descritta nella sezione 4"). Procedi una fase alla volta, testando ogni passaggio prima di andare avanti.
-
----
-
-## 9. Decisioni prese finora (stato dell'implementazione)
-
-Registro delle scelte già implementate nel codice (Fase 1 + Fase 2).
-
-### Stack e struttura
-- **Next.js 16** (App Router, TypeScript, Turbopack) + **Tailwind CSS v4** + **shadcn/ui** (stile base-nova, icone lucide).
-- Cartelle: `src/app`, `src/components`, `src/lib` (dati + i18n), `src/types` (tipi di dominio).
-- PWA: `manifest.webmanifest`, service worker (`public/sw.js`, solo in produzione), icone installabili. Il SW (`concierge-v2`) precarica lo shell dell'app e usa **network-first con fallback offline** per le pagine e **stale-while-revalidate** per gli asset: dopo la prima visita, Wi-Fi/regole/contatti restano visibili anche offline (verificabile solo in produzione, non nella preview dev).
-
-### Routing dinamico
-- La pagina ospite è **`app/[bnbId]/page.tsx`** (server component): legge lo slug, cerca il B&B, `notFound()` se non esiste, `generateStaticParams` per pre-generare le pagine.
-- `app/page.tsx` (root) **reindirizza** al primo B&B (Fase 1 = singola struttura). In futuro qui può stare una landing o l'elenco strutture.
-- URL ospite = `tuodominio/[slug]` (es. `/casa-rossa`), lo stesso che finisce nel QR Code.
-
-### 3 tab (bottom navigation)
-Navigazione a tab lato client (stato in `BnbGuide`), barra fissa in basso stile app (icone lucide). Header sticky con **logo** (`theme.logoUrl`), nome del B&B e **toggle lingua IT/EN**.
-
-**Home** (`home-tab.tsx`), in quest'ordine:
-1. Messaggio di benvenuto (`content[lang].welcomeMessage`)
-2. **Hero image** arrotondata (`theme.heroImage` → illustrazione `public/hero-trastevere.svg`)
-3. Due widget affiancati: **meteo Roma** (finto) + **ora locale** (orologio reale `Europe/Rome`) — `home-widgets.tsx`
-4. **Card Wi-Fi** in evidenza: password grande, "Copia" → clipboard + **toast "Copiato!"** (`wifi-card.tsx`)
-5. Due bottoni rapidi **WhatsApp Host** / **Chiama** (link placeholder `wa.me` / `tel:`) — `quick-actions.tsx`
-6. **Modulo recensione** 5 stelle (`review-module.tsx`): 1-3 → form feedback interno + toast; 4-5 → redirect Google Reviews (placeholder)
-7. Anteprima **"Dove mangiare"** (primi 3 posti food + "Vedi tutti" → Esplora)
-
-**Esplora** (`explore-tab.tsx`) — feed completo dei posti con **filtri per categoria** (Tutti / Ristoranti / Bar / Servizi).
-
-**Info** (`info-tab.tsx`), lista verticale di card:
-0. Card **Emergenze** (`emergency-card.tsx`) in cima: 112 (numero unico europeo), chiama host, e **farmacia più vicina** ricavata dai posti (`servizio` il cui nome contiene "farmacia/pharmacy"). Accento rosso dal token `--destructive`. I contatti host arrivano dal database come prop (`bnb.hostPhone`/`bnb.hostWhatsapp`, usati anche dalle azioni rapide Home); in `src/lib/contacts.ts` restano il 112 e gli helper `telUrl`/`whatsappUrl`.
-1. Card **Check-in / Check-out** (`content.checkIn` / `content.checkOut`)
-2. Card **Regole + Raccolta differenziata** (`rules-card.tsx`): regole da `houseRules` + 5 cestini con colori standard Roma/AMA
-3. Card **servizi** (`Cucina` / `Parcheggio` / `Colazione`): renderizzate **solo se il relativo toggle è true** (rendering condizionale, non nascondere via CSS)
-4. **Location & Trasporti**: embed **Google Maps** (`map-embed.tsx`, indirizzo placeholder) + 3 blocchi **"In Aereo / In Treno / In Auto"** (`transport-blocks.tsx`), con **"In Auto" evidenziato** (anello ocra + badge) per la ZTL di Roma
-5. Card **Contatti**
-
-### Toast e clipboard
-- Toast via **sonner** (`components/ui/sonner.tsx`, riscritto senza `next-themes`; `<Toaster/>` montato in `BnbGuide`). Usato da Wi-Fi (copia) e recensione.
-- La copia Wi-Fi usa `navigator.clipboard` + toast: funziona su device reale; nella preview headless il clipboard è bloccato (`NotAllowedError`).
-
-### Contenuti multilingue (it/en/es) con fallback su `en`
-- Lingue supportate: **IT / EN / ES** (toggle in alto). Aggiungere una lingua = aggiungere un valore a `Locale`, un blocco a `ui` (`i18n.ts`) e i contenuti in `mock-data.ts`.
-- Il tipo `Localized<T>` (`src/types/index.ts`) è `{ en: T } & Partial<Record<Locale, T>>`: **l'inglese è sempre presente ed è la base del fallback**, le altre lingue sono opzionali. Così si può aggiungere una lingua *a poco a poco* senza tradurre subito ogni campo.
-- **Fallback su `en`** (`src/lib/localize.ts`): `resolveLocalized(content/location, locale)` fa il fallback **per-chiave**; `pick(text, locale)` fa lo stesso per i testi dei posti. Nei posti (`mock-data.ts`), il **nome** resta volutamente `{it,en}` (nome proprio, in ES ripiega su EN), mentre la **descrizione** ha anche la traduzione `es` per tutti i 7 posti.
-- L'attributo `lang` dell'`<html>` viene allineato alla lingua scelta (effetto in `bnb-guide.tsx`) per gli screen reader.
-
-### Tema dinamico via CSS variables (ThemeProvider)
-- Il componente **`ThemeProvider`** (`src/components/theme-provider.tsx`) legge `theme` dei dati e inietta le **CSS custom properties** su un wrapper. Copre l'intera superficie colore della UI ospite, in tre famiglie:
-  - **Identità**: `--primary`/`--terracotta`/`--terracotta-strong` (via `color-mix`) e `--ring` da `primaryColor`; `--ochre` da `secondaryColor`.
-  - **Sfondi**: `--background` da `backgroundColor`; `--card`/`--popover` da `cardColor` (opzionale); `--secondary`/`--accent` da `sectionColor` (opzionale).
-  - **Testo**: `--foreground`/`--card-foreground`/`--popover-foreground` da `textColor` (opzionale); `--muted-foreground` da `mutedColor` (opzionale); `--primary-foreground` da `primaryForeground` (opzionale) — testo/icone **sopra** le superfici nel colore principale (header, card Wi-Fi, selettore lingua, badge).
-  - I 5 colori opzionali, se assenti (righe create prima della Fase 3), non sovrascrivono nulla: restano i default della palette base in `globals.css`.
-- I componenti usano solo le utility Tailwind mappate su quelle variabili (`bg-terracotta`, `text-terracotta`, `bg-background`…), **mai colori fissi**: così ogni B&B mostra automaticamente la propria palette. Default "Casa Rossa": terracotta/ocra/crema.
-- **Eccezione voluta**: i pulsanti secondari della guest (`Chiama`, `Vedi tutti`, `Apri in Google Maps`) sono outline nel **colore principale** (bordo + testo), non nel variant `outline` generico di shadcn — quello eredita `bg-background`/`text-foreground` e su sfondi pagina scuri diventava illeggibile. Il variant condiviso (`buttonVariants`) non è stato toccato, solo i 3 punti d'uso lato guest (`quick-actions.tsx`, `home-tab.tsx`, `place-card.tsx`).
-- **Badge (`ui/badge.tsx`)**: altezza `min-h-5` (non `h-5` fisso) e niente `overflow-hidden`, così la capsula abbraccia il testo invece di tagliarlo in verticale quando il font renderizzato è un filo più alto del previsto.
-
-### Design token centralizzati (niente valori "arbitrary" nei componenti)
-Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva da un token. Verificato con scansione su tutto `src`.
-- **Ombre** → 4 token in `@theme` di `globals.css`: `--shadow-soft` (card/mappa), `--shadow-raised` (hero), `--shadow-header` (header), `--shadow-brand` (Wi-Fi, ombra colorata terracotta). I componenti usano le utility `shadow-soft/raised/header/brand`, non più `shadow-[...]` ripetuti.
-- **Testo/superfici su primario** → utility `text-primary-foreground` / `bg-primary-foreground` (mappate su `--primary-foreground`), **non** `text-white`/`bg-white`: così il contrasto resta corretto anche se un B&B sceglie una `primaryColor` chiara. (Unica eccezione volutamente `text-white`: le icone dei cestini, che stanno sopra i colori-dominio AMA, non su una superficie di tema.)
-- **Raggi** → sempre la scala nominale (`rounded-xl/2xl/3xl/4xl/full`), che in `@theme` deriva da `--radius`. Niente raggi in pixel.
-- **Colore chrome del prodotto** (`theme_color`/`background_color` del manifest, `themeColor` del viewport) → fonte unica in **`src/lib/brand.ts`** (`BRAND.primary`/`BRAND.background`), importata da `manifest.ts` e `layout.tsx`: non più esadecimali ricopiati a mano. È il default statico dell'app (il manifest è unico, non per-tenant); la palette per-struttura resta nel `theme` dei dati.
-- **Colori cestini AMA** → costanti di dominio in **`src/lib/recycling.ts`** (`RECYCLING_BINS`), non più hardcoded dentro `rules-card.tsx`; le etichette bilingui restano in `i18n.ts`.
-
-### Estetica "app nativa iOS"
-- Card con `rounded-3xl`, **ombre morbide** (niente bordi netti/ring), tanto respiro tra le sezioni. Base modificata in `src/components/ui/card.tsx`.
-- Navigazione a tab con barra fissa in basso; header e nav con ombra soft.
-
-### Fase 2 — dati da Supabase
-- **Schema SQL versionato** in `supabase/schema.sql` (tabelle + RLS + seed di Casa Rossa con i 7 posti, identico ai vecchi mock): si applica a mano nell'SQL Editor di Supabase, perché l'app ha solo la **anon key** (che grazie alla RLS può solo leggere). Il file è rieseguibile senza duplicare il seed (`on conflict do nothing`).
-- **Client**: `src/lib/supabase.ts` — un solo `createClient` condiviso, env `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (in `.env.local` e su Vercel); lancia un errore chiaro se mancano.
-- **Data layer**: `src/lib/data.ts` — `getBnb` / `getBnbIds` / `getPlaces` ora **async** su Supabase, stesse firme di prima (i server component fanno `await`). Mappano snake_case → camelCase; i jsonb hanno già la forma dei tipi di dominio. Ogni funzione è avvolta in `cache()` di React (una query sola per richiesta anche se chiamata da `generateMetadata` + pagina). `src/lib/mock-data.ts` **eliminato**.
-- **Errori senza crash**: se il DB non risponde o lo schema non è ancora applicato, il data layer logga e restituisce vuoto → la pagina fa `notFound()` (404), la build **non** fallisce.
-- **ISR**: `export const revalidate = 300` su `app/page.tsx` e `app/[bnbId]/page.tsx` — le pagine restano statiche/CDN ma si rigenerano al massimo ogni 5 minuti, quindi le modifiche fatte a mano su Supabase compaiono senza redeploy. `generateStaticParams` ora legge gli slug dal DB; gli slug creati dopo la build vengono comunque serviti alla prima richiesta (`dynamicParams` default).
-- **Campi nuovi collegati**: `address` (mappa + riga indirizzo in Info), `host_phone` / `host_whatsapp` (bottoni rapidi Home, card Emergenze e card Contatti) viaggiano su `Bnb` (`address`, `hostPhone`, `hostWhatsapp`) e arrivano ai componenti come prop; in `src/lib/contacts.ts` restano solo il 112 e gli helper `telUrl`/`whatsappUrl`. La card **Contatti** (Info) ora mostra righe tappabili WhatsApp/telefono reali invece del solo testo generico.
-
-### Fase 3 — autenticazione e pannello admin
-- **Login titolare** su `/admin/login` via Supabase Auth (email+password). Le credenziali passano da una **server action** (`src/app/admin/actions.ts`, `login`/`logout`): mai nel bundle client. Nessuna registrazione pubblica (arriva in Fase 8).
-- **Sessione via cookie** con `@supabase/ssr`: `src/lib/supabase-server.ts` (`createServerClient`, cookie da `next/headers`) per pagine/azioni admin. Le pagine ospite **restano sul client anon "puro"** (`src/lib/supabase.ts`) per non diventare dinamiche e conservare l'ISR statico.
-- **Proxy** (`src/proxy.ts` — in Next 16 il middleware si chiama così): rinfresca la sessione e reindirizza (non loggato → `/admin/login`; loggato su login → `/admin`). `matcher` limitato a `/admin/:path*`, così il sito ospite non ci passa. Non è l'unica difesa: ogni pagina/azione admin richiama `requireUser()` e la RLS protegge i dati.
-- **DAL** (`src/lib/auth.ts`): `getSessionUser` (in `cache()`), `requireUser` (redirect al login), `getOwnedBnbs`/`getOwnedBnb`/`getOwnedBnbPlaces` filtrano per `owner_id` (difesa in profondità oltre alla RLS). I mapper riga↔dominio sono stati estratti in `src/lib/bnb-mappers.ts`, condivisi con `data.ts`.
-- **Editor** (`/admin/[bnbId]`): `general-form.tsx` (nome, tema, toggle, indirizzo, contatti — campi diretti), `content-editor.tsx` (tab lingua IT/EN/ES, Wi-Fi/check-in/regole/trasporti, regole della casa add/remove; lo stato multilingua viaggia in un campo `payload` JSON), `places-editor.tsx` (upsert + delete per singolo posto, con `sort_order` per l'ordine). Le server action (`src/app/admin/[bnbId]/actions.ts`) verificano l'ownership, normalizzano l'input e fanno `revalidatePath('/[bnbId]')` così la modifica si vede subito sul sito ospite.
-- **Fallback lingua preservato**: nel salvataggio contenuti, `en` è sempre scritto; `it`/`es` vengono omessi se lasciati completamente vuoti (ripiegano su `en` per-chiave, coerente con `localize.ts`). Non è stata toccata la logica di localizzazione.
-- **Nuovo campo tipo**: `Place.sortOrder` (colonna `sort_order`), aggiunto ai mapper; le UI ospite lo ignorano (l'ordine è già applicato nella query).
-- **Validato senza DB remoto**: le policy `phase-3-auth.sql` provate su PGlite con `auth.uid()` stubbato (titolare A modifica solo la sua struttura, B bloccato, A non può cedere l'ownership, anon in sola lettura). Login/redirect/errore-credenziali provati in preview; `tsc`, lint e `build` verdi (route `/admin*` correttamente dinamiche, proxy riconosciuto).
-
-### Fase 3 — editor del tema (colori)
-- **`ThemeColors`** (`src/components/admin/theme-colors.tsx`), dentro `general-form.tsx`: gli 8 colori del tema in 3 gruppi con etichette e descrizioni in linguaggio semplice — **Colori identità** (principale, accento), **Sfondi** (pagina, riquadri/card, icone), **Testo** (principale, secondario, "testo sui colori" = `primaryForeground`). I 5 colori aggiunti in Fase 3 hanno un default hex allineato all'oklch della palette base (calcolato via conversione, non a occhio), così salvare senza toccarli non sposta l'aspetto di chi non li usa.
-- **Color picker** (`src/components/admin/color-picker-field.tsx`): swatch che apre un popover con **react-colorful** (ruota saturazione/tonalità, ~2.8KB), chiude con click-fuori o Esc; il campo hex resta modificabile a mano in parallelo.
-- **Anteprima live** (`src/components/admin/theme-preview.tsx`): mini-mockup della pagina ospite (header, card Wi-Fi, sezione con chip/testo/badge) che inietta le stesse CSS variables del `ThemeProvider` reale e si aggiorna **a ogni tasto/click**, prima ancora di salvare. Sticky sotto l'header admin, sempre visibile mentre si scorrono i selettori.
-- I nuovi campi viaggiano nel `theme` jsonb come gli altri (`updateBnbGeneral` in `src/app/admin/[bnbId]/actions.ts` li scrive solo se valorizzati) — nessuna migrazione di schema, `theme` era già jsonb libero.
-
-### Note / debiti tecnici da sistemare più avanti
-- ⚠️ **Il feedback 1-3 stelle si perde** (debito noto, lasciato volutamente anche in Fase 2): `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Ora che c'è Supabase si potrà risolvere con una tabella `guest_feedback` (+ policy di insert per `anon`) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
-- `walkingDistance` è un campo singolo (non `{it,en}`): valore neutro (es. "5 min") + suffisso localizzato lato UI.
-- `imageUrl` dei **posti** è ancora vuoto → card con emoji di categoria come placeholder (l'hero invece usa già `theme.heroImage`). `next/image` è pronto; per foto da URL esterni servirà configurare `remotePatterns`.
-- **Valori seed ancora finti nel database**: `address` ("Via della Lungaretta 42") e `host_phone`/`host_whatsapp` (`+390000000000`) di Casa Rossa sono i vecchi placeholder, ora **da aggiornare dal pannello Supabase** con i dati reali (il codice li legge già). Restano placeholder nel codice: link Google Reviews (`placeid`) e meteo del widget (serve un'API). L'ora locale è invece reale.
+1. ⚠️ **Feedback 1–3 stelle perso**: `review-module.tsx` mostra "Grazie!" e scarta il testo. Serve una tabella `guest_feedback` + policy insert per anon + vista in admin. Finché non c'è, quel canale NON raccoglie nulla.
+2. ⚠️ **`image_url` dei posti è una trappola**: l'admin permette di inserirlo, ma `next.config.ts` non ha `remotePatterns` → un URL esterno fa **crashare la card** lato ospite (`next/image` rifiuta host non configurati). Se un titolare lo compila, la pagina si rompe. Da risolvere prima di dare l'admin a un cliente vero (Storage Supabase o `remotePatterns` + fallback).
+3. **Colori del tema non validati server-side**: `updateBnbGeneral` salva qualsiasi stringa; un valore malformato produce CSS variables spazzatura (tema rotto, non un exploit: React le confina nel valore della proprietà). Aggiungere validazione `#rrggbb` nell'action.
+4. **`maximumScale: 1` nel viewport** blocca il pinch-zoom: contrario al principio "turisti stanchi senza occhiali". Valutare la rimozione.
+5. **Link Google Reviews placeholder** (`placeid=PLACEHOLDER` in `review-module.tsx`): andrà per-struttura nel DB.
+6. **Meteo finto** nel widget Home (l'orologio invece è reale). Serve un'API.
+7. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
+8. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
+9. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
+10. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
+11. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
