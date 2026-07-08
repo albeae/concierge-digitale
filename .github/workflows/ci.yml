@@ -1,0 +1,55 @@
+# ============================================================================
+# CI (idea n. 5): trasforma la quality bar del CLAUDE.md (sezione 5) da
+# disciplina volontaria a cancello automatico. Gira a ogni push, su qualsiasi
+# branch: `main` deploya in produzione su Vercel, meglio saperlo PRIMA.
+# ============================================================================
+name: CI
+
+on: [push]
+
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installa dipendenze
+        run: npm ci
+
+      - name: TypeScript (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Lint (zero warning)
+        run: npm run lint -- --max-warnings 0
+
+      - name: SQL su PGlite (schema + policy RLS)
+        run: npm run test:sql
+
+      # Le due regole "grep" della quality bar: niente colori hex fuori
+      # whitelist (romperebbero il theming per-struttura) e niente
+      # text-white/bg-white fuori dai cestini AMA (sparirebbero coi temi).
+      - name: Colori fuori whitelist
+        run: |
+          hits=$(grep -rn -E "#[0-9a-fA-F]{6}" src/components src/app --include="*.tsx" \
+            | grep -v "admin/theme-colors.tsx" \
+            | grep -v "admin/color-picker-field.tsx" || true)
+          if [ -n "$hits" ]; then
+            echo "Colori hex fuori dai file whitelist:"; echo "$hits"; exit 1
+          fi
+          hits=$(grep -rn "text-white\|bg-white" src/components | grep -v "rules-card.tsx" || true)
+          if [ -n "$hits" ]; then
+            echo "text-white/bg-white fuori da rules-card.tsx:"; echo "$hits"; exit 1
+          fi
+
+      # Env fittizie: la build NON deve dipendere da un DB raggiungibile
+      # (regola n. 10 del CLAUDE.md: DB spento → pagine 404, build verde).
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
