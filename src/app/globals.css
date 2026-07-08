@@ -144,3 +144,11 @@
     @apply font-sans;
   }
 }
+
+/* Il selettore colori (react-colorful) dentro il popover .picker dell'admin:
+   di default è largo 200px fissi; qui si adatta alla larghezza del popover,
+   che è vincolata al campo — così non esce mai dallo schermo su mobile. */
+.picker .react-colorful {
+  width: 100%;
+  min-width: 0;
+}

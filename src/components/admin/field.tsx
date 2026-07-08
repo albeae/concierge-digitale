@@ -4,8 +4,10 @@
  */
 import { cn } from "@/lib/utils";
 
+// text-base su mobile, text-sm da sm in su: sotto i 16px iOS Safari zooma la
+// pagina quando si tocca un campo (e la UI "esce dallo schermo" a destra).
 const baseField =
-  "w-full rounded-xl border border-input bg-card px-3.5 py-2.5 text-sm text-foreground shadow-soft outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50";
+  "w-full rounded-xl border border-input bg-card px-3.5 py-2.5 text-base sm:text-sm text-foreground shadow-soft outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50";
 
 export function Label({
   className,

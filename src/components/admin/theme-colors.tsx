@@ -73,7 +73,10 @@ export function ThemeColors({ theme }: { theme: BnbTheme }) {
       <ThemePreview colors={colors} />
 
       {GROUPS.map((group) => (
-        <fieldset key={group.title} className="space-y-2.5">
+        // min-w-0: i fieldset hanno min-width:min-content di default, e i
+        // suggerimenti in nowrap (truncate) li allargavano oltre lo schermo
+        // del telefono. Con min-w-0 il testo torna a troncarsi con l'ellissi.
+        <fieldset key={group.title} className="min-w-0 space-y-2.5">
           <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {group.title}
           </legend>

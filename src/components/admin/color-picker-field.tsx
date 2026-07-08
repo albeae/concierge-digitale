@@ -72,14 +72,19 @@ export function ColorPickerField({
           aria-label={`${label}: codice colore`}
           spellCheck={false}
           className={cn(
-            "w-28 shrink-0 font-mono text-xs uppercase",
+            // text-base su mobile: sotto i 16px iOS zooma la pagina al tocco
+            // e i campi "escono" dallo schermo verso destra.
+            "w-28 shrink-0 font-mono text-base uppercase sm:text-xs",
             !valid && "border-destructive/60",
           )}
         />
       </div>
 
       {open && (
-        <div className="picker absolute left-0 top-full z-30 mt-2 rounded-2xl border border-border bg-card p-3 shadow-raised">
+        // left-0 right-0 + max-w: il popover non supera mai la larghezza del
+        // campo, quindi resta dentro lo schermo anche sui telefoni stretti
+        // (react-colorful si adatta via .picker in globals.css).
+        <div className="picker absolute left-0 right-0 top-full z-30 mt-2 max-w-72 rounded-2xl border border-border bg-card p-3 shadow-raised">
           <HexColorPicker
             color={valid ? value : "#ffffff"}
             onChange={onChange}
