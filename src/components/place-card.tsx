@@ -67,7 +67,7 @@ export function PlaceCard({ place, locale, t }: PlaceCardProps) {
           rel="noopener noreferrer"
           className={cn(
             buttonVariants({ variant: "outline" }),
-            "mt-4 h-12 w-full gap-2 text-base font-medium",
+            "mt-4 h-12 w-full gap-2 rounded-2xl border-terracotta/50 bg-transparent text-base font-medium text-terracotta hover:bg-terracotta/10 hover:text-terracotta",
           )}
         >
           <MapPin className="size-5" aria-hidden />

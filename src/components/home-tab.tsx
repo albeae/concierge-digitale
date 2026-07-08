@@ -105,7 +105,7 @@ export function HomeTab({
             onClick={onSeeAll}
             className={cn(
               buttonVariants({ variant: "outline" }),
-              "h-12 w-full rounded-2xl text-base font-medium",
+              "h-12 w-full rounded-2xl border-terracotta/50 bg-transparent text-base font-medium text-terracotta hover:bg-terracotta/10 hover:text-terracotta",
             )}
           >
             {t.places.seeAll}

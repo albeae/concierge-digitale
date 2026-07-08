@@ -22,26 +22,26 @@ const GROUPS: {
   fields: { name: keyof ColorState; label: string; hint: string }[];
 }[] = [
   {
-    title: "Brand",
+    title: "Colori identità",
     fields: [
-      { name: "primaryColor", label: "Colore principale", hint: "Header, pulsanti, accenti forti" },
-      { name: "primaryForeground", label: "Testo sul principale", hint: "Scritte/icone su header, Wi-Fi, lingua, badge" },
-      { name: "secondaryColor", label: "Colore accento", hint: "Dettagli secondari (ocra)" },
+      { name: "primaryColor", label: "Colore principale", hint: "Barra in alto, pulsanti e link" },
+      { name: "secondaryColor", label: "Colore accento", hint: "Piccoli dettagli in risalto (badge, cornici)" },
     ],
   },
   {
-    title: "Superfici",
+    title: "Sfondi",
     fields: [
-      { name: "backgroundColor", label: "Sfondo pagina", hint: "Sfondo generale dell'app" },
-      { name: "cardColor", label: "Sfondo sezioni", hint: "Le card e i pannelli" },
-      { name: "sectionColor", label: "Sfondo icone", hint: "I cerchietti dietro le icone e i widget" },
+      { name: "backgroundColor", label: "Sfondo pagina", hint: "Dietro a tutta la pagina" },
+      { name: "cardColor", label: "Sfondo riquadri", hint: "Le card e i pannelli bianchi" },
+      { name: "sectionColor", label: "Sfondo icone", hint: "I cerchietti dietro le icone" },
     ],
   },
   {
     title: "Testo",
     fields: [
-      { name: "textColor", label: "Colore del testo", hint: "Testo principale" },
-      { name: "mutedColor", label: "Testo secondario", hint: "Didascalie ed etichette grigie" },
+      { name: "textColor", label: "Testo principale", hint: "Le scritte che si leggono di più" },
+      { name: "mutedColor", label: "Testo secondario", hint: "Le scritte piccole in grigio" },
+      { name: "primaryForeground", label: "Testo sui colori", hint: "Scritte e icone sopra la barra e i pulsanti colorati" },
     ],
   },
 ];

@@ -30,7 +30,7 @@ export function QuickActions({ t, hostPhone, hostWhatsapp }: QuickActionsProps) 
         href={telUrl(hostPhone)}
         className={cn(
           buttonVariants({ variant: "outline" }),
-          "h-14 gap-2 rounded-2xl text-base font-semibold",
+          "h-14 gap-2 rounded-2xl border-terracotta/50 bg-transparent text-base font-semibold text-terracotta hover:bg-terracotta/10 hover:text-terracotta",
         )}
       >
         <Phone className="size-5" aria-hidden />
