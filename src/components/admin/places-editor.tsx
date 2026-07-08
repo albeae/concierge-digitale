@@ -5,6 +5,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { deletePlace, upsertPlace } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input, Label, Select, Textarea } from "@/components/admin/field";
 import { StatusMessage } from "@/components/admin/form-bits";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Place, PlaceCategory } from "@/types";
@@ -127,10 +128,12 @@ function PlaceForm({
                 defaultValue={place?.walkingDistance ?? ""}
               />
             </FieldRow>
-            <FieldRow label="Immagine (URL)" htmlFor={`img-${place?.id ?? "new"}`}>
-              <Input
+            <FieldRow label="Immagine" htmlFor={`img-${place?.id ?? "new"}`}>
+              <ImageUploadField
+                bnbId={bnbId}
                 id={`img-${place?.id ?? "new"}`}
                 name="image_url"
+                slot="posto"
                 defaultValue={place?.imageUrl ?? ""}
               />
             </FieldRow>

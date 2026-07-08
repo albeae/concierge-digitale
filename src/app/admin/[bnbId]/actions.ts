@@ -266,6 +266,71 @@ export async function upsertPlace(
 }
 
 // ---------------------------------------------------------------------------
+// Upload immagini su Supabase Storage (bucket bnb-images): logo, hero e foto
+// dei posti caricati dal pannello invece di incollare URL. Il client
+// ridimensiona prima dell'invio; qui si rifà ogni controllo (tipo, peso) e la
+// RLS del bucket impone la cartella <slug> delle sole strutture possedute.
+// ---------------------------------------------------------------------------
+const UPLOAD_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024; // allineato al limite del bucket
+const UPLOAD_SLOTS = new Set(["logo", "hero", "posto"]);
+
+export type UploadResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+export async function uploadBnbImage(
+  bnbId: string,
+  formData: FormData,
+): Promise<UploadResult> {
+  const owned = await getOwnedBnb(bnbId);
+  if (!owned) return { ok: false, error: "Struttura non trovata o non tua." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Nessuna immagine ricevuta." };
+  }
+  const ext = UPLOAD_EXT[file.type];
+  if (!ext) {
+    return { ok: false, error: "Formato non supportato: usa JPG, PNG o WebP." };
+  }
+  if (file.size > UPLOAD_MAX_BYTES) {
+    return { ok: false, error: "Immagine troppo grande (max 5 MB)." };
+  }
+  const slotRaw = str(formData.get("slot"));
+  const slot = UPLOAD_SLOTS.has(slotRaw) ? slotRaw : "img";
+
+  // Nome sempre nuovo (niente upsert): il CDN può tenere in cache l'URL
+  // vecchio per un anno, un file sovrascritto sembrerebbe "non cambiato".
+  const path = `${bnbId}/${slot}-${Date.now().toString(36)}.${ext}`;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.storage
+    .from("bnb-images")
+    .upload(path, file, { contentType: file.type, cacheControl: "31536000" });
+
+  if (error) {
+    console.error("[admin] uploadBnbImage:", error.message);
+    return {
+      ok: false,
+      error:
+        "Caricamento non riuscito. Riprova; se è la prima volta, va applicato supabase/storage-images.sql.",
+    };
+  }
+
+  const { data } = supabase.storage.from("bnb-images").getPublicUrl(path);
+
+  // L'immagine entra nella pagina ospite solo dopo il salvataggio del form,
+  // ma ogni azione di scrittura chiude con la revalidation (vedi CLAUDE.md).
+  refreshGuest(bnbId);
+  return { ok: true, url: data.publicUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Feedback privati degli ospiti: il titolare può solo eliminarli (una volta
 // letti/gestiti). L'inserimento avviene dalla pagina ospite (client anon).
 // ---------------------------------------------------------------------------

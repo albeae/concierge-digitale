@@ -5,6 +5,7 @@ import { Save } from "lucide-react";
 import { updateBnbGeneral } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input } from "@/components/admin/field";
 import { StatusMessage } from "@/components/admin/form-bits";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { ThemeColors } from "@/components/admin/theme-colors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,17 +32,29 @@ export function GeneralForm({ bnb }: { bnb: Bnb }) {
           <ThemeColors theme={bnb.theme} />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <FieldRow label="Logo (URL)" htmlFor="logoUrl">
-              <Input
+            <FieldRow
+              label="Logo"
+              htmlFor="logoUrl"
+              hint="Carica un'immagine o incolla un URL."
+            >
+              <ImageUploadField
+                bnbId={bnb.id}
                 id="logoUrl"
                 name="logoUrl"
+                slot="logo"
                 defaultValue={bnb.theme.logoUrl}
               />
             </FieldRow>
-            <FieldRow label="Immagine hero (URL)" htmlFor="heroImage">
-              <Input
+            <FieldRow
+              label="Immagine hero"
+              htmlFor="heroImage"
+              hint="La foto grande nella Home della guida."
+            >
+              <ImageUploadField
+                bnbId={bnb.id}
                 id="heroImage"
                 name="heroImage"
+                slot="hero"
                 defaultValue={bnb.theme.heroImage}
               />
             </FieldRow>
