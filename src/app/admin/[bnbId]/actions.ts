@@ -265,6 +265,39 @@ export async function upsertPlace(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Feedback privati degli ospiti: il titolare può solo eliminarli (una volta
+// letti/gestiti). L'inserimento avviene dalla pagina ospite (client anon).
+// ---------------------------------------------------------------------------
+export async function deleteFeedback(
+  bnbId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const owned = await getOwnedBnb(bnbId);
+  if (!owned) return { ok: false, error: "Struttura non trovata o non tua." };
+
+  const feedbackId = str(formData.get("feedback_id"));
+  if (!feedbackId) return { ok: false, error: "Feedback non valido." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("guest_feedback")
+    .delete()
+    .eq("id", feedbackId)
+    .eq("bnb_client_id", bnbId);
+
+  if (error) {
+    console.error("[admin] deleteFeedback:", error.message);
+    return { ok: false, error: "Eliminazione non riuscita." };
+  }
+
+  // I feedback non compaiono nella pagina ospite, ma ogni scrittura chiude
+  // con la revalidation per mantenere l'invariante (vedi CLAUDE.md).
+  refreshGuest(bnbId);
+  return { ok: true, message: "Feedback eliminato." };
+}
+
 export async function deletePlace(
   bnbId: string,
   _prev: ActionState,

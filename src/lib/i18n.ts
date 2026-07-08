@@ -86,6 +86,7 @@ export interface UiStrings {
     placeholder: string;
     submit: string;
     thanks: string;
+    error: string;
     starAria: (n: number) => string;
   };
   emergency: {
@@ -185,6 +186,7 @@ export const ui: Record<Locale, UiStrings> = {
       placeholder: "Raccontaci cosa possiamo migliorare…",
       submit: "Invia feedback",
       thanks: "Grazie per il tuo feedback!",
+      error: "Invio non riuscito. Riprova tra poco.",
       starAria: (n) => `${n} stelle su 5`,
     },
     emergency: {
@@ -282,6 +284,7 @@ export const ui: Record<Locale, UiStrings> = {
       placeholder: "Tell us what we can improve…",
       submit: "Send feedback",
       thanks: "Thanks for your feedback!",
+      error: "Something went wrong. Please try again shortly.",
       starAria: (n) => `${n} out of 5 stars`,
     },
     emergency: {
@@ -379,6 +382,7 @@ export const ui: Record<Locale, UiStrings> = {
       placeholder: "Cuéntanos qué podemos mejorar…",
       submit: "Enviar comentarios",
       thanks: "¡Gracias por tus comentarios!",
+      error: "No se pudo enviar. Inténtalo de nuevo en un momento.",
       starAria: (n) => `${n} de 5 estrellas`,
     },
     emergency: {

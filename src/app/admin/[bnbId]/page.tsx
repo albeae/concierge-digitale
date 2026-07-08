@@ -4,10 +4,11 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { ContentEditor } from "@/components/admin/content-editor";
+import { FeedbackList } from "@/components/admin/feedback-list";
 import { EditorSection } from "@/components/admin/form-bits";
 import { GeneralForm } from "@/components/admin/general-form";
 import { PlacesEditor } from "@/components/admin/places-editor";
-import { getOwnedBnb, getOwnedBnbPlaces } from "@/lib/auth";
+import { getOwnedBnb, getOwnedBnbFeedback, getOwnedBnbPlaces } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Modifica struttura",
@@ -28,7 +29,10 @@ export default async function EditBnbPage({ params }: EditBnbPageProps) {
   const bnb = await getOwnedBnb(bnbId);
   if (!bnb) notFound();
 
-  const places = await getOwnedBnbPlaces(bnbId);
+  const [places, feedback] = await Promise.all([
+    getOwnedBnbPlaces(bnbId),
+    getOwnedBnbFeedback(bnbId),
+  ]);
 
   return (
     <AdminShell title={bnb.name} subtitle={`/${bnb.id}`} backHref="/admin">
@@ -64,6 +68,13 @@ export default async function EditBnbPage({ params }: EditBnbPageProps) {
           description="Ristoranti, bar e servizi che consigli ai tuoi ospiti."
         >
           <PlacesEditor bnbId={bnb.id} places={places} />
+        </EditorSection>
+
+        <EditorSection
+          title="Feedback ricevuti"
+          description="I messaggi privati degli ospiti che hanno lasciato 1-3 stelle: li vedi solo tu."
+        >
+          <FeedbackList bnbId={bnb.id} feedback={feedback} />
         </EditorSection>
       </div>
     </AdminShell>

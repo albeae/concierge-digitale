@@ -99,6 +99,21 @@ export interface Bnb {
   hostWhatsapp: string;
 }
 
+/**
+ * Feedback privato lasciato da un ospite (tabella `guest_feedback`).
+ * Solo i voti 1-3: i voti alti vengono dirottati su Google Reviews e non
+ * passano dal database. L'ospite scrive, solo il titolare legge.
+ */
+export interface GuestFeedback {
+  id: string;
+  bnbId: string;
+  /** Voto 1-3 (su una scala a 5 stelle mostrata all'ospite). */
+  rating: number;
+  message: string;
+  /** ISO timestamp di quando l'ospite ha inviato il feedback. */
+  createdAt: string;
+}
+
 /** Categoria di un posto consigliato dall'host. */
 export type PlaceCategory = "ristorante" | "bar" | "servizio";
 

@@ -13,14 +13,17 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import {
   BNB_COLUMNS,
+  FEEDBACK_COLUMNS,
   PLACE_COLUMNS,
   mapBnb,
+  mapFeedback,
   mapPlace,
   type BnbRow,
+  type FeedbackRow,
   type PlaceRow,
 } from "@/lib/bnb-mappers";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { Bnb, Place } from "@/types";
+import type { Bnb, GuestFeedback, Place } from "@/types";
 
 /**
  * Utente loggato (o null). `cache()` lo memoizza nella richiesta: `getUser()`
@@ -75,6 +78,29 @@ export async function getOwnedBnb(id: string): Promise<Bnb | null> {
     return null;
   }
   return data ? mapBnb(data as unknown as BnbRow) : null;
+}
+
+/**
+ * I feedback privati degli ospiti di una struttura posseduta, dal più recente.
+ * La RLS mostra solo i feedback delle strutture del titolare loggato; le
+ * pagine chiamano comunque prima `getOwnedBnb` (difesa in profondità).
+ * Se la tabella non esiste ancora (SQL non applicato) si logga e si torna
+ * vuoto: la pagina admin resta usabile.
+ */
+export async function getOwnedBnbFeedback(bnbId: string): Promise<GuestFeedback[]> {
+  await requireUser();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("guest_feedback")
+    .select(FEEDBACK_COLUMNS)
+    .eq("bnb_client_id", bnbId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(`[auth] getOwnedBnbFeedback("${bnbId}") fallita:`, error.message);
+    return [];
+  }
+  return ((data ?? []) as unknown as FeedbackRow[]).map(mapFeedback);
 }
 
 /** I posti di una struttura posseduta, ordinati come li vede l'ospite. */

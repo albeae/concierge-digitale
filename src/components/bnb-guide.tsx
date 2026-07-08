@@ -65,6 +65,7 @@ export function BnbGuide({ bnb, places }: BnbGuideProps) {
       <main className="flex-1 px-4 pt-7">
         {tab === "home" && (
           <HomeTab
+            bnbId={bnb.id}
             content={content}
             theme={bnb.theme}
             locale={locale}

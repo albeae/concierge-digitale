@@ -11,6 +11,7 @@ import type {
   BnbLocation,
   BnbTheme,
   BnbToggles,
+  GuestFeedback,
   Localized,
   LocalizedText,
   Place,
@@ -43,11 +44,22 @@ export interface PlaceRow {
   sort_order: number;
 }
 
+/** Riga di `guest_feedback` così come esce da Supabase. */
+export interface FeedbackRow {
+  id: string;
+  bnb_client_id: string;
+  rating: number;
+  message: string;
+  created_at: string;
+}
+
 export const BNB_COLUMNS =
   "id, name, theme, toggles, content, location, address, host_phone, host_whatsapp";
 
 export const PLACE_COLUMNS =
   "id, bnb_client_id, category, name, description, walking_distance, image_url, google_maps_url, sort_order";
+
+export const FEEDBACK_COLUMNS = "id, bnb_client_id, rating, message, created_at";
 
 export function mapBnb(row: BnbRow): Bnb {
   return {
@@ -60,6 +72,16 @@ export function mapBnb(row: BnbRow): Bnb {
     address: row.address,
     hostPhone: row.host_phone,
     hostWhatsapp: row.host_whatsapp,
+  };
+}
+
+export function mapFeedback(row: FeedbackRow): GuestFeedback {
+  return {
+    id: row.id,
+    bnbId: row.bnb_client_id,
+    rating: row.rating,
+    message: row.message,
+    createdAt: row.created_at,
   };
 }
 

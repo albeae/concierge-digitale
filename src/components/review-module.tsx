@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
+import { submitGuestFeedback } from "@/app/[bnbId]/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { UiStrings } from "@/lib/i18n";
 
 interface ReviewModuleProps {
+  /** Slug della struttura: il feedback finisce su guest_feedback con questa FK. */
+  bnbId: string;
   t: UiStrings["review"];
 }
 
@@ -16,11 +19,12 @@ interface ReviewModuleProps {
 const GOOGLE_REVIEWS_URL =
   "https://search.google.com/local/writereview?placeid=PLACEHOLDER";
 
-export function ReviewModule({ t }: ReviewModuleProps) {
+export function ReviewModule({ bnbId, t }: ReviewModuleProps) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [pending, startTransition] = useTransition();
 
   const handleSelect = (value: number) => {
     setRating(value);
@@ -34,12 +38,26 @@ export function ReviewModule({ t }: ReviewModuleProps) {
     }
   };
 
+  // Salva davvero il feedback (server action → guest_feedback su Supabase).
+  // Il form si svuota SOLO se l'invio riesce: in caso di errore l'ospite non
+  // perde quello che ha scritto e può riprovare.
   const handleSubmit = () => {
-    setShowForm(false);
-    setFeedback("");
-    setRating(0);
-    setHover(0);
-    toast.success(t.thanks);
+    startTransition(async () => {
+      const result = await submitGuestFeedback({
+        bnbId,
+        rating,
+        message: feedback,
+      });
+      if (!result.ok) {
+        toast.error(t.error);
+        return;
+      }
+      setShowForm(false);
+      setFeedback("");
+      setRating(0);
+      setHover(0);
+      toast.success(t.thanks);
+    });
   };
 
   const active = hover || rating;
@@ -85,10 +103,10 @@ export function ReviewModule({ t }: ReviewModuleProps) {
             />
             <Button
               onClick={handleSubmit}
-              disabled={feedback.trim().length === 0}
+              disabled={feedback.trim().length === 0 || pending}
               className="h-12 w-full bg-terracotta text-base font-semibold text-primary-foreground hover:bg-terracotta-strong"
             >
-              {t.submit}
+              {pending ? "…" : t.submit}
             </Button>
           </div>
         )}

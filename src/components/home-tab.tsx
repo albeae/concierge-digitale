@@ -11,6 +11,8 @@ import type { UiStrings } from "@/lib/i18n";
 import type { BnbContent, BnbTheme, Locale, Place } from "@/types";
 
 interface HomeTabProps {
+  /** Slug della struttura (per l'invio del feedback privato). */
+  bnbId: string;
   content: BnbContent;
   theme: BnbTheme;
   locale: Locale;
@@ -23,6 +25,7 @@ interface HomeTabProps {
 }
 
 export function HomeTab({
+  bnbId,
   content,
   theme,
   locale,
@@ -69,7 +72,7 @@ export function HomeTab({
       />
 
       {/* 6. Modulo recensione. */}
-      <ReviewModule t={t.review} />
+      <ReviewModule bnbId={bnbId} t={t.review} />
 
       {/* 7. Anteprima "Dove mangiare" (feed completo nella tab Esplora). */}
       {previewPlaces.length > 0 && (
