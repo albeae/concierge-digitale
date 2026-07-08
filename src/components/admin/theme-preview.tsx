@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { Star } from "lucide-react";
+import { Check, Star, TriangleAlert } from "lucide-react";
+import { contrastRatio, WCAG_AA_LARGE, WCAG_AA_MIN } from "@/lib/contrast";
 
 /** I valori dei colori del tema modificati nell'editor. */
 export interface ThemeColorValues {
@@ -11,6 +12,69 @@ export interface ThemeColorValues {
   sectionColor: string;
   textColor: string;
   mutedColor: string;
+}
+
+/**
+ * Le coppie testo/sfondo davvero usate nella pagina ospite: sono quelle da
+ * tenere leggibili. Le etichette ricalcano i nomi dei campi dell'editor.
+ */
+const CONTRAST_PAIRS: {
+  fg: keyof ThemeColorValues;
+  bg: keyof ThemeColorValues;
+  label: string;
+}[] = [
+  { fg: "textColor", bg: "backgroundColor", label: "Testo principale su Sfondo pagina" },
+  { fg: "textColor", bg: "cardColor", label: "Testo principale su Sfondo riquadri" },
+  { fg: "mutedColor", bg: "backgroundColor", label: "Testo secondario su Sfondo pagina" },
+  { fg: "mutedColor", bg: "cardColor", label: "Testo secondario su Sfondo riquadri" },
+  { fg: "primaryForeground", bg: "primaryColor", label: "Testo sui colori su Colore principale" },
+  { fg: "primaryForeground", bg: "secondaryColor", label: "Testo sui colori su Colore accento" },
+];
+
+/**
+ * Guardia di contrasto WCAG su due livelli: sotto 3:1 (soglia AA anche per il
+ * testo grande) l'avviso è rosso — quel testo è illeggibile quasi ovunque;
+ * tra 3 e 4.5 (soglia AA per il testo normale) è un suggerimento soft.
+ * I campi con hex non ancora validi vengono semplicemente saltati.
+ */
+function ContrastWarnings({ colors }: { colors: ThemeColorValues }) {
+  const issues = CONTRAST_PAIRS.flatMap((pair) => {
+    const ratio = contrastRatio(colors[pair.fg], colors[pair.bg]);
+    return ratio !== null && ratio < WCAG_AA_MIN
+      ? [{ label: pair.label, ratio, severe: ratio < WCAG_AA_LARGE }]
+      : [];
+  });
+
+  if (issues.length === 0) {
+    return (
+      <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Check className="size-3.5 shrink-0" aria-hidden />
+        Testi ben leggibili su tutti gli sfondi.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="mt-2 space-y-1" role="alert">
+      {issues.map((issue) => (
+        <li
+          key={issue.label}
+          className={
+            issue.severe
+              ? "flex items-start gap-1.5 rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs font-medium leading-relaxed text-destructive"
+              : "flex items-start gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5 text-xs font-medium leading-relaxed text-secondary-foreground"
+          }
+        >
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            {issue.severe
+              ? `${issue.label}: contrasto ${issue.ratio.toFixed(1)} — testo quasi illeggibile, cambia uno dei due colori.`
+              : `${issue.label}: contrasto ${issue.ratio.toFixed(1)}, sotto il consigliato ${WCAG_AA_MIN}. Meglio aumentare un po' lo stacco.`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /**
@@ -91,6 +155,9 @@ export function ThemePreview({ colors }: { colors: ThemeColorValues }) {
           </div>
         </div>
       </div>
+
+      {/* Guardia di contrasto: sempre visibile perché il riquadro è sticky. */}
+      <ContrastWarnings colors={colors} />
     </div>
   );
 }
