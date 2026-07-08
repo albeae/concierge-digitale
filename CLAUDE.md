@@ -59,7 +59,7 @@ Questa è la parte concettualmente più importante: se lo schema è fatto bene, 
 - `id` (testo, slug usato nell'URL — es. `casa-rossa`, `villa-borghese`)
 - `name`
 - `owner_id` (uuid **nullable**, FK verso `auth.users`. **Non univoco**: più righe possono condividere lo stesso `owner_id`, così un titolare potrà gestire più strutture senza cambiare schema. `NULL` finché non c'è il login: si valorizza in Fase 3 con Supabase Auth)
-- `theme` (jsonb: `primaryColor`, `secondaryColor`, `backgroundColor`, `logoUrl`, `heroImage`)
+- `theme` (jsonb: `primaryColor`, `secondaryColor`, `backgroundColor`, `logoUrl`, `heroImage`, più i colori opzionali aggiunti in Fase 3 — `primaryForeground`, `textColor`, `mutedColor`, `cardColor`, `sectionColor` — assenti = default della palette base, vedi sezione 9)
 - `toggles` (jsonb: `hasKitchen`, `hasParking`, `offersBreakfast`)
 - `content` (jsonb bilingue `{ it, en, es? }`: `welcomeMessage`, `wifiNetworkName`, `wifiPassword`, `checkIn`, `checkOut`, `houseRules[]`)
 - `location` (jsonb bilingue `{ it, en, es? }`: `airport`, `train`, `ztl`)
@@ -237,8 +237,14 @@ Navigazione a tab lato client (stato in `BnbGuide`), barra fissa in basso stile 
 - L'attributo `lang` dell'`<html>` viene allineato alla lingua scelta (effetto in `bnb-guide.tsx`) per gli screen reader.
 
 ### Tema dinamico via CSS variables (ThemeProvider)
-- Il componente **`ThemeProvider`** (`src/components/theme-provider.tsx`) legge `theme` dei dati e inietta le **CSS custom properties** (`--primary`, `--terracotta`, `--terracotta-strong` via `color-mix`, `--ochre`, `--background`) su un wrapper.
+- Il componente **`ThemeProvider`** (`src/components/theme-provider.tsx`) legge `theme` dei dati e inietta le **CSS custom properties** su un wrapper. Copre l'intera superficie colore della UI ospite, in tre famiglie:
+  - **Identità**: `--primary`/`--terracotta`/`--terracotta-strong` (via `color-mix`) e `--ring` da `primaryColor`; `--ochre` da `secondaryColor`.
+  - **Sfondi**: `--background` da `backgroundColor`; `--card`/`--popover` da `cardColor` (opzionale); `--secondary`/`--accent` da `sectionColor` (opzionale).
+  - **Testo**: `--foreground`/`--card-foreground`/`--popover-foreground` da `textColor` (opzionale); `--muted-foreground` da `mutedColor` (opzionale); `--primary-foreground` da `primaryForeground` (opzionale) — testo/icone **sopra** le superfici nel colore principale (header, card Wi-Fi, selettore lingua, badge).
+  - I 5 colori opzionali, se assenti (righe create prima della Fase 3), non sovrascrivono nulla: restano i default della palette base in `globals.css`.
 - I componenti usano solo le utility Tailwind mappate su quelle variabili (`bg-terracotta`, `text-terracotta`, `bg-background`…), **mai colori fissi**: così ogni B&B mostra automaticamente la propria palette. Default "Casa Rossa": terracotta/ocra/crema.
+- **Eccezione voluta**: i pulsanti secondari della guest (`Chiama`, `Vedi tutti`, `Apri in Google Maps`) sono outline nel **colore principale** (bordo + testo), non nel variant `outline` generico di shadcn — quello eredita `bg-background`/`text-foreground` e su sfondi pagina scuri diventava illeggibile. Il variant condiviso (`buttonVariants`) non è stato toccato, solo i 3 punti d'uso lato guest (`quick-actions.tsx`, `home-tab.tsx`, `place-card.tsx`).
+- **Badge (`ui/badge.tsx`)**: altezza `min-h-5` (non `h-5` fisso) e niente `overflow-hidden`, così la capsula abbraccia il testo invece di tagliarlo in verticale quando il font renderizzato è un filo più alto del previsto.
 
 ### Design token centralizzati (niente valori "arbitrary" nei componenti)
 Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva da un token. Verificato con scansione su tutto `src`.
@@ -269,6 +275,12 @@ Regola: **nessun colore/ombra/raggio scritto a mano** nel markup; tutto deriva d
 - **Fallback lingua preservato**: nel salvataggio contenuti, `en` è sempre scritto; `it`/`es` vengono omessi se lasciati completamente vuoti (ripiegano su `en` per-chiave, coerente con `localize.ts`). Non è stata toccata la logica di localizzazione.
 - **Nuovo campo tipo**: `Place.sortOrder` (colonna `sort_order`), aggiunto ai mapper; le UI ospite lo ignorano (l'ordine è già applicato nella query).
 - **Validato senza DB remoto**: le policy `phase-3-auth.sql` provate su PGlite con `auth.uid()` stubbato (titolare A modifica solo la sua struttura, B bloccato, A non può cedere l'ownership, anon in sola lettura). Login/redirect/errore-credenziali provati in preview; `tsc`, lint e `build` verdi (route `/admin*` correttamente dinamiche, proxy riconosciuto).
+
+### Fase 3 — editor del tema (colori)
+- **`ThemeColors`** (`src/components/admin/theme-colors.tsx`), dentro `general-form.tsx`: gli 8 colori del tema in 3 gruppi con etichette e descrizioni in linguaggio semplice — **Colori identità** (principale, accento), **Sfondi** (pagina, riquadri/card, icone), **Testo** (principale, secondario, "testo sui colori" = `primaryForeground`). I 5 colori aggiunti in Fase 3 hanno un default hex allineato all'oklch della palette base (calcolato via conversione, non a occhio), così salvare senza toccarli non sposta l'aspetto di chi non li usa.
+- **Color picker** (`src/components/admin/color-picker-field.tsx`): swatch che apre un popover con **react-colorful** (ruota saturazione/tonalità, ~2.8KB), chiude con click-fuori o Esc; il campo hex resta modificabile a mano in parallelo.
+- **Anteprima live** (`src/components/admin/theme-preview.tsx`): mini-mockup della pagina ospite (header, card Wi-Fi, sezione con chip/testo/badge) che inietta le stesse CSS variables del `ThemeProvider` reale e si aggiorna **a ogni tasto/click**, prima ancora di salvare. Sticky sotto l'header admin, sempre visibile mentre si scorrono i selettori.
+- I nuovi campi viaggiano nel `theme` jsonb come gli altri (`updateBnbGeneral` in `src/app/admin/[bnbId]/actions.ts` li scrive solo se valorizzati) — nessuna migrazione di schema, `theme` era già jsonb libero.
 
 ### Note / debiti tecnici da sistemare più avanti
 - ⚠️ **Il feedback 1-3 stelle si perde** (debito noto, lasciato volutamente anche in Fase 2): `review-module.tsx` → `handleSubmit` mostra solo il toast "Grazie!" e scarta il testo (`setFeedback("")`), senza salvarlo o inviarlo da nessuna parte. Ora che c'è Supabase si potrà risolvere con una tabella `guest_feedback` (+ policy di insert per `anon`) — nel frattempo **non affidarsi a questo canale** per raccogliere lamentele reali degli ospiti. Le recensioni 4-5 stelle invece funzionano già (redirect a Google Reviews, anche se con `placeid` placeholder).
