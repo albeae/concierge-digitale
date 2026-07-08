@@ -8,6 +8,7 @@ import { FeedbackList } from "@/components/admin/feedback-list";
 import { EditorSection } from "@/components/admin/form-bits";
 import { GeneralForm } from "@/components/admin/general-form";
 import { PlacesEditor } from "@/components/admin/places-editor";
+import { QrSection } from "@/components/admin/qr-section";
 import { getOwnedBnb, getOwnedBnbFeedback, getOwnedBnbPlaces } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -68,6 +69,13 @@ export default async function EditBnbPage({ params }: EditBnbPageProps) {
           description="Ristoranti, bar e servizi che consigli ai tuoi ospiti."
         >
           <PlacesEditor bnbId={bnb.id} places={places} />
+        </EditorSection>
+
+        <EditorSection
+          title="QR code e stampa"
+          description="Il codice da far inquadrare agli ospiti e la scheda da mettere in camera."
+        >
+          <QrSection bnbId={bnb.id} />
         </EditorSection>
 
         <EditorSection
