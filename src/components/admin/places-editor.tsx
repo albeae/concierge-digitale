@@ -1,15 +1,9 @@
 "use client";
 
-import {
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2, X } from "lucide-react";
-import { deletePlace, movePlace, upsertPlace } from "@/app/admin/[bnbId]/actions";
+import { ChevronDown, ChevronUp, Plus, Save, Trash2, X } from "lucide-react";
+import { deletePlace, reorderPlaces, upsertPlace } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input, Label, Select, Textarea } from "@/components/admin/field";
 import { StatusMessage } from "@/components/admin/form-bits";
 import { ImageUploadField } from "@/components/admin/image-upload-field";
@@ -222,34 +216,28 @@ function DeletePlaceForm({ bnbId, place }: { bnbId: string; place: Place }) {
 /**
  * Riga compatta di un posto: mostra categoria, nome e distanza a colpo
  * d'occhio; cliccando si apre a fisarmonica il form di modifica completo.
- * Le frecce su/giù riordinano il posto (movePlace) senza aprirlo.
+ * Le frecce su/giù riordinano il posto: lo spostamento lo gestisce il genitore
+ * (aggiornamento ottimistico), qui si chiama solo `onMove`.
  */
 function PlaceRow({
   bnbId,
   place,
   isFirst,
   isLast,
+  onMove,
 }: {
   bnbId: string;
   place: Place;
   isFirst: boolean;
   isLast: boolean;
+  onMove: (direction: "up" | "down") => void;
 }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const [moving, startMove] = useTransition();
   const name = place.name.it ?? place.name.en;
-
-  const move = (direction: "up" | "down") => {
-    startMove(async () => {
-      await movePlace(bnbId, place.id, direction);
-      router.refresh();
-    });
-  };
 
   return (
     <Card className="overflow-hidden py-0">
-      <div className="flex items-center gap-1 p-2 pl-3.5">
+      <div className="flex items-stretch gap-2 p-2 pl-3.5">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -278,25 +266,26 @@ function PlaceRow({
           />
         </button>
 
-        {/* Frecce di riordino: impilate, disabilitate ai bordi della lista. */}
-        <div className="flex shrink-0 flex-col">
+        {/* Frecce di riordino: pulsanti grandi (tap target ampio su mobile),
+            impilati e disabilitati ai bordi della lista. */}
+        <div className="flex shrink-0 flex-col gap-1">
           <button
             type="button"
-            onClick={() => move("up")}
-            disabled={isFirst || moving}
+            onClick={() => onMove("up")}
+            disabled={isFirst}
             aria-label={`Sposta "${name}" più in alto`}
-            className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+            className="grid size-9 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-95 disabled:opacity-30"
           >
-            <ArrowUp className="size-4" aria-hidden />
+            <ChevronUp className="size-5" aria-hidden />
           </button>
           <button
             type="button"
-            onClick={() => move("down")}
-            disabled={isLast || moving}
+            onClick={() => onMove("down")}
+            disabled={isLast}
             aria-label={`Sposta "${name}" più in basso`}
-            className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+            className="grid size-9 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-95 disabled:opacity-30"
           >
-            <ArrowDown className="size-4" aria-hidden />
+            <ChevronDown className="size-5" aria-hidden />
           </button>
         </div>
       </div>
@@ -320,37 +309,78 @@ export function PlacesEditor({
   bnbId: string;
   places: Place[];
 }) {
-  const nextSort = places.reduce((max, p) => Math.max(max, p.sortOrder), 0) + 1;
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  // Ordine gestito nel client per l'aggiornamento OTTIMISTICO: allo spostamento
+  // la lista si riordina all'istante e la scrittura va in background (niente
+  // attesa del server + refresh). Si risincronizza col prop quando il server
+  // manda nuovi dati (dopo aggiunta/modifica/eliminazione): pattern ufficiale
+  // React di "reset dello stato al cambio di prop" durante il render.
+  const [items, setItems] = useState(places);
+  const [syncedFrom, setSyncedFrom] = useState(places);
+  if (places !== syncedFrom) {
+    setSyncedFrom(places);
+    setItems(places);
+  }
+
+  const nextSort = items.reduce((max, p) => Math.max(max, p.sortOrder), 0) + 1;
+
+  const moveItem = (id: string, direction: "up" | "down") => {
+    const idx = items.findIndex((p) => p.id === id);
+    const swap = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swap < 0 || swap >= items.length) return;
+
+    const next = items.slice();
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    const previous = items;
+    setItems(next); // UI aggiornata subito
+
+    // Scrittura in background: mando l'ordine completo. Se fallisce (o va in
+    // errore), ripristino l'ordine e risincronizzo dal server.
+    const rollback = () => {
+      setItems(previous);
+      router.refresh();
+    };
+    void reorderPlaces(
+      bnbId,
+      next.map((p) => p.id),
+    )
+      .then((res) => {
+        if (!res?.ok) rollback();
+      })
+      .catch(rollback);
+  };
+
   // Lista compatta: di default si vedono solo le prime righe, il resto dietro
   // "Vedi tutti". Ogni riga si apre singolarmente per la modifica.
-  const collapsible = places.length > PLACES_VISIBLE;
-  const shownCount = collapsible && !expanded ? PLACES_VISIBLE : places.length;
-  const hiddenCount = places.length - shownCount;
+  const collapsible = items.length > PLACES_VISIBLE;
+  const shownCount = collapsible && !expanded ? PLACES_VISIBLE : items.length;
+  const hiddenCount = items.length - shownCount;
 
   return (
     <div className="space-y-3">
-      {places.length === 0 && !adding && (
+      {items.length === 0 && !adding && (
         <p className="text-sm text-muted-foreground">
           Nessun posto ancora. Aggiungine uno con il pulsante qui sotto.
         </p>
       )}
 
-      {places.length > 1 && (
+      {items.length > 1 && (
         <p className="text-xs text-muted-foreground">
           Usa le frecce ↑↓ per cambiare l&apos;ordine in cui gli ospiti vedono i posti.
         </p>
       )}
 
-      {places.slice(0, shownCount).map((place, i) => (
+      {items.slice(0, shownCount).map((place, i) => (
         <PlaceRow
           key={place.id}
           bnbId={bnbId}
           place={place}
           isFirst={i === 0}
-          isLast={i === places.length - 1}
+          isLast={i === items.length - 1}
+          onMove={(direction) => moveItem(place.id, direction)}
         />
       ))}
 

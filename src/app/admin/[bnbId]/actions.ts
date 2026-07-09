@@ -10,7 +10,6 @@
  */
 import { revalidatePath } from "next/cache";
 import { getOwnedBnb } from "@/lib/auth";
-import { computeReorder } from "@/lib/reorder";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type {
   BnbContent,
@@ -398,51 +397,51 @@ export async function deletePlace(
 }
 
 // ---------------------------------------------------------------------------
-// Riordino dei posti con le frecce su/giù: scambia la posizione di un posto
-// con il suo vicino. Sostituisce il vecchio campo numerico "Ordine".
+// Riordino dei posti: il client manda l'ordine COMPLETO desiderato (lista di
+// id) e qui si riscrive sort_order = posizione. Il client è la sorgente di
+// verità → niente race tra spostamenti rapidi (l'ultimo ordine ricevuto vince)
+// e nessun problema con ordini duplicati o buchi preesistenti.
 // ---------------------------------------------------------------------------
-export async function movePlace(
+export async function reorderPlaces(
   bnbId: string,
-  placeId: string,
-  direction: "up" | "down",
+  orderedIds: string[],
 ): Promise<ActionState> {
   const owned = await getOwnedBnb(bnbId);
   if (!owned) return { ok: false, error: "Struttura non trovata o non tua." };
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { ok: true, message: "Ordine invariato." };
+  }
 
   const supabase = await createSupabaseServerClient();
-  // La stessa ordinazione della lista ospite/admin (sort_order, poi id): così
-  // "vicino" qui = vicino a schermo.
+  // Solo gli id che appartengono davvero a questa struttura (niente fiducia
+  // nel client; la RLS è comunque l'ultima rete).
   const { data, error } = await supabase
     .from("restaurants")
     .select("id, sort_order")
-    .eq("bnb_client_id", bnbId)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
+    .eq("bnb_client_id", bnbId);
 
   if (error) {
-    console.error("[admin] movePlace select:", error.message);
+    console.error("[admin] reorderPlaces select:", error.message);
     return { ok: false, error: "Riordino non riuscito." };
   }
 
-  const list = (data ?? []) as { id: string; sort_order: number }[];
-
-  // Rinormalizza l'intera lista su 0..n-1 dopo lo spostamento: robusto anche
-  // con ordini duplicati o buchi (lo scambio "secco" dei due valori invece
-  // trascinava altri posti — vedi src/lib/reorder.ts e i suoi test).
-  const updates = computeReorder(
-    list.map((p) => ({ id: p.id, sortOrder: p.sort_order })),
-    placeId,
-    direction,
+  const current = new Map(
+    ((data ?? []) as { id: string; sort_order: number }[]).map((r) => [r.id, r.sort_order]),
   );
+  // Riscrive sort_order = posizione, ma solo per gli id validi e SOLO quando il
+  // valore cambia davvero (evita update inutili → più veloce).
+  const updates = orderedIds
+    .filter((id) => current.has(id))
+    .map((id, position) => ({ id, position }))
+    .filter(({ id, position }) => current.get(id) !== position);
 
-  // Niente da fare: posto assente o già al bordo (le frecce sono disabilitate).
   if (updates.length === 0) return { ok: true, message: "Ordine invariato." };
 
   const results = await Promise.all(
     updates.map((u) =>
       supabase
         .from("restaurants")
-        .update({ sort_order: u.sortOrder })
+        .update({ sort_order: u.position })
         .eq("id", u.id)
         .eq("bnb_client_id", bnbId),
     ),
@@ -450,7 +449,7 @@ export async function movePlace(
 
   const failed = results.find((r) => r.error);
   if (failed?.error) {
-    console.error("[admin] movePlace update:", failed.error.message);
+    console.error("[admin] reorderPlaces update:", failed.error.message);
     return { ok: false, error: "Riordino non riuscito." };
   }
 
