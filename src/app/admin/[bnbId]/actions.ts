@@ -10,6 +10,7 @@
  */
 import { revalidatePath } from "next/cache";
 import { getOwnedBnb } from "@/lib/auth";
+import { computeReorder } from "@/lib/reorder";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type {
   BnbContent,
@@ -424,38 +425,32 @@ export async function movePlace(
   }
 
   const list = (data ?? []) as { id: string; sort_order: number }[];
-  const idx = list.findIndex((p) => p.id === placeId);
-  if (idx === -1) return { ok: false, error: "Posto non trovato." };
 
-  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-  // Già in cima/in fondo: niente da fare (le frecce sono anche disabilitate).
-  if (swapIdx < 0 || swapIdx >= list.length) {
-    return { ok: true, message: "Il posto è già al limite." };
-  }
+  // Rinormalizza l'intera lista su 0..n-1 dopo lo spostamento: robusto anche
+  // con ordini duplicati o buchi (lo scambio "secco" dei due valori invece
+  // trascinava altri posti — vedi src/lib/reorder.ts e i suoi test).
+  const updates = computeReorder(
+    list.map((p) => ({ id: p.id, sortOrder: p.sort_order })),
+    placeId,
+    direction,
+  );
 
-  const a = list[idx];
-  const b = list[swapIdx];
-  // Scambio i due valori di sort_order. Se coincidono (ordini duplicati), li
-  // rendo distinti così lo spostamento si vede davvero.
-  let aNew = b.sort_order;
-  const bNew = a.sort_order;
-  if (aNew === bNew) aNew = direction === "up" ? bNew - 1 : bNew + 1;
+  // Niente da fare: posto assente o già al bordo (le frecce sono disabilitate).
+  if (updates.length === 0) return { ok: true, message: "Ordine invariato." };
 
-  const [r1, r2] = await Promise.all([
-    supabase
-      .from("restaurants")
-      .update({ sort_order: aNew })
-      .eq("id", a.id)
-      .eq("bnb_client_id", bnbId),
-    supabase
-      .from("restaurants")
-      .update({ sort_order: bNew })
-      .eq("id", b.id)
-      .eq("bnb_client_id", bnbId),
-  ]);
+  const results = await Promise.all(
+    updates.map((u) =>
+      supabase
+        .from("restaurants")
+        .update({ sort_order: u.sortOrder })
+        .eq("id", u.id)
+        .eq("bnb_client_id", bnbId),
+    ),
+  );
 
-  if (r1.error || r2.error) {
-    console.error("[admin] movePlace update:", r1.error?.message ?? r2.error?.message);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    console.error("[admin] movePlace update:", failed.error.message);
     return { ok: false, error: "Riordino non riuscito." };
   }
 
