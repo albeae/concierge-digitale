@@ -1,9 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus, Save, Trash2, X } from "lucide-react";
-import { deletePlace, upsertPlace } from "@/app/admin/[bnbId]/actions";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2, X } from "lucide-react";
+import { deletePlace, movePlace, upsertPlace } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input, Label, Select, Textarea } from "@/components/admin/field";
 import { StatusMessage } from "@/components/admin/form-bits";
 import { ImageUploadField } from "@/components/admin/image-upload-field";
@@ -60,35 +66,26 @@ function PlaceFormBody({
     <>
       <form ref={formRef} action={formAction} className="space-y-4">
         {place && <input type="hidden" name="place_id" value={place.id} />}
+        {/* L'ordine dei posti esistenti si cambia con le frecce nella riga
+            (movePlace): il form non lo invia più. Il nuovo posto invece porta
+            il sort_order del fondo lista, così finisce in coda. */}
+        {isNew && (
+          <input type="hidden" name="sort_order" defaultValue={defaultSortOrder ?? 0} />
+        )}
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <FieldRow label="Categoria" htmlFor={`cat-${place?.id ?? "new"}`}>
-            <Select
-              id={`cat-${place?.id ?? "new"}`}
-              name="category"
-              defaultValue={place?.category ?? "ristorante"}
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </Select>
-          </FieldRow>
-          <FieldRow
-            label="Ordine"
-            htmlFor={`sort-${place?.id ?? "new"}`}
-            hint="Più basso = prima."
+        <FieldRow label="Categoria" htmlFor={`cat-${place?.id ?? "new"}`}>
+          <Select
+            id={`cat-${place?.id ?? "new"}`}
+            name="category"
+            defaultValue={place?.category ?? "ristorante"}
           >
-            <Input
-              id={`sort-${place?.id ?? "new"}`}
-              name="sort_order"
-              type="number"
-              defaultValue={place?.sortOrder ?? defaultSortOrder ?? 0}
-              className="w-24"
-            />
-          </FieldRow>
-        </div>
+            {CATEGORIES.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </Select>
+        </FieldRow>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <FieldRow label="Nome (IT)" htmlFor={`nit-${place?.id ?? "new"}`}>
@@ -225,38 +222,82 @@ function DeletePlaceForm({ bnbId, place }: { bnbId: string; place: Place }) {
 /**
  * Riga compatta di un posto: mostra categoria, nome e distanza a colpo
  * d'occhio; cliccando si apre a fisarmonica il form di modifica completo.
+ * Le frecce su/giù riordinano il posto (movePlace) senza aprirlo.
  */
-function PlaceRow({ bnbId, place }: { bnbId: string; place: Place }) {
+function PlaceRow({
+  bnbId,
+  place,
+  isFirst,
+  isLast,
+}: {
+  bnbId: string;
+  place: Place;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [moving, startMove] = useTransition();
   const name = place.name.it ?? place.name.en;
+
+  const move = (direction: "up" | "down") => {
+    startMove(async () => {
+      await movePlace(bnbId, place.id, direction);
+      router.refresh();
+    });
+  };
 
   return (
     <Card className="overflow-hidden py-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-secondary/40"
-      >
-        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-terracotta">
-          {categoryLabel(place.category)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold">{name}</span>
-          {place.walkingDistance && (
-            <span className="block text-xs text-muted-foreground">
-              {place.walkingDistance} a piedi
-            </span>
-          )}
-        </span>
-        <ChevronDown
-          className={cn(
-            "size-5 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-          aria-hidden
-        />
-      </button>
+      <div className="flex items-center gap-1 p-2 pl-3.5">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
+        >
+          <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-terracotta">
+            {categoryLabel(place.category)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold">{name}</span>
+            {place.walkingDistance && (
+              <span className="block text-xs text-muted-foreground">
+                {place.walkingDistance} a piedi
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={cn(
+              "size-5 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
+
+        {/* Frecce di riordino: impilate, disabilitate ai bordi della lista. */}
+        <div className="flex shrink-0 flex-col">
+          <button
+            type="button"
+            onClick={() => move("up")}
+            disabled={isFirst || moving}
+            aria-label={`Sposta "${name}" più in alto`}
+            className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+          >
+            <ArrowUp className="size-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => move("down")}
+            disabled={isLast || moving}
+            aria-label={`Sposta "${name}" più in basso`}
+            className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+          >
+            <ArrowDown className="size-4" aria-hidden />
+          </button>
+        </div>
+      </div>
 
       {open && (
         <CardContent className="border-t border-border p-5 pt-4">
@@ -284,8 +325,8 @@ export function PlacesEditor({
   // Lista compatta: di default si vedono solo le prime righe, il resto dietro
   // "Vedi tutti". Ogni riga si apre singolarmente per la modifica.
   const collapsible = places.length > PLACES_VISIBLE;
-  const visible = collapsible && !expanded ? places.slice(0, PLACES_VISIBLE) : places;
-  const hiddenCount = places.length - visible.length;
+  const shownCount = collapsible && !expanded ? PLACES_VISIBLE : places.length;
+  const hiddenCount = places.length - shownCount;
 
   return (
     <div className="space-y-3">
@@ -295,8 +336,20 @@ export function PlacesEditor({
         </p>
       )}
 
-      {visible.map((place) => (
-        <PlaceRow key={place.id} bnbId={bnbId} place={place} />
+      {places.length > 1 && (
+        <p className="text-xs text-muted-foreground">
+          Usa le frecce ↑↓ per cambiare l&apos;ordine in cui gli ospiti vedono i posti.
+        </p>
+      )}
+
+      {places.slice(0, shownCount).map((place, i) => (
+        <PlaceRow
+          key={place.id}
+          bnbId={bnbId}
+          place={place}
+          isFirst={i === 0}
+          isLast={i === places.length - 1}
+        />
       ))}
 
       {collapsible && (

@@ -230,8 +230,7 @@ export async function upsertPlace(
   if (descIt) description.it = descIt;
   if (descEs) description.es = descEs;
 
-  const sortRaw = Number.parseInt(str(formData.get("sort_order")), 10);
-  const row = {
+  const row: Record<string, unknown> = {
     bnb_client_id: bnbId,
     category,
     name,
@@ -239,8 +238,15 @@ export async function upsertPlace(
     walking_distance: str(formData.get("walking_distance")),
     image_url: str(formData.get("image_url")),
     google_maps_url: str(formData.get("google_maps_url")),
-    sort_order: Number.isFinite(sortRaw) ? sortRaw : 0,
   };
+  // sort_order lo si tocca SOLO quando il form lo invia: il nuovo posto lo
+  // manda (va in fondo alla lista), i posti esistenti no — il loro ordine lo
+  // gestiscono le frecce (movePlace), non il salvataggio della scheda.
+  const sortStr = str(formData.get("sort_order"));
+  if (sortStr !== "") {
+    const n = Number.parseInt(sortStr, 10);
+    row.sort_order = Number.isFinite(n) ? n : 0;
+  }
 
   const supabase = await createSupabaseServerClient();
   const placeId = str(formData.get("place_id"));
@@ -388,4 +394,71 @@ export async function deletePlace(
 
   refreshGuest(bnbId);
   return { ok: true, message: "Posto eliminato." };
+}
+
+// ---------------------------------------------------------------------------
+// Riordino dei posti con le frecce su/giù: scambia la posizione di un posto
+// con il suo vicino. Sostituisce il vecchio campo numerico "Ordine".
+// ---------------------------------------------------------------------------
+export async function movePlace(
+  bnbId: string,
+  placeId: string,
+  direction: "up" | "down",
+): Promise<ActionState> {
+  const owned = await getOwnedBnb(bnbId);
+  if (!owned) return { ok: false, error: "Struttura non trovata o non tua." };
+
+  const supabase = await createSupabaseServerClient();
+  // La stessa ordinazione della lista ospite/admin (sort_order, poi id): così
+  // "vicino" qui = vicino a schermo.
+  const { data, error } = await supabase
+    .from("restaurants")
+    .select("id, sort_order")
+    .eq("bnb_client_id", bnbId)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("[admin] movePlace select:", error.message);
+    return { ok: false, error: "Riordino non riuscito." };
+  }
+
+  const list = (data ?? []) as { id: string; sort_order: number }[];
+  const idx = list.findIndex((p) => p.id === placeId);
+  if (idx === -1) return { ok: false, error: "Posto non trovato." };
+
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  // Già in cima/in fondo: niente da fare (le frecce sono anche disabilitate).
+  if (swapIdx < 0 || swapIdx >= list.length) {
+    return { ok: true, message: "Il posto è già al limite." };
+  }
+
+  const a = list[idx];
+  const b = list[swapIdx];
+  // Scambio i due valori di sort_order. Se coincidono (ordini duplicati), li
+  // rendo distinti così lo spostamento si vede davvero.
+  let aNew = b.sort_order;
+  const bNew = a.sort_order;
+  if (aNew === bNew) aNew = direction === "up" ? bNew - 1 : bNew + 1;
+
+  const [r1, r2] = await Promise.all([
+    supabase
+      .from("restaurants")
+      .update({ sort_order: aNew })
+      .eq("id", a.id)
+      .eq("bnb_client_id", bnbId),
+    supabase
+      .from("restaurants")
+      .update({ sort_order: bNew })
+      .eq("id", b.id)
+      .eq("bnb_client_id", bnbId),
+  ]);
+
+  if (r1.error || r2.error) {
+    console.error("[admin] movePlace update:", r1.error?.message ?? r2.error?.message);
+    return { ok: false, error: "Riordino non riuscito." };
+  }
+
+  refreshGuest(bnbId);
+  return { ok: true, message: "Ordine aggiornato." };
 }
