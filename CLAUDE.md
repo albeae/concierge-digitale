@@ -198,4 +198,4 @@ Rimaste fuori di proposito (annotate per non perderle):
 1. **`next/image` per gli URL di Storage** — ora che le immagini caricate stanno su un host noto, un `remotePattern` mirato al progetto Supabase ridarebbe l'ottimizzazione automatica (il `<img>` con fallback resta per gli URL esterni incollati a mano).
 2. **Pulizia immagini orfane su Storage** — ogni upload crea un file nuovo (scelta anti-cache); i vecchi restano nel bucket. Prima o poi: elenco file per cartella e cestino nell'admin.
 
-Le prossime proposte si aggiungono qui, in ordine di valore/sforzo; non anticiparle senza richiesta esplicita.
+Le prossime proposte si aggiungono qui, in ordine di valore/sforzo; non anticiparle senza richiesta esplicita, a meno che non si tratti di cose tecniche che il proprietario in quanto principiante non comprende.
