@@ -256,7 +256,9 @@ function PlaceRow({
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
         >
-          <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-terracotta">
+          {/* Larghezza fissa: così i nomi dei posti partono tutti dalla stessa
+              colonna, a prescindere dalla categoria (Bar vs Ristorante). */}
+          <span className="w-20 shrink-0 rounded-full bg-secondary py-1 text-center text-xs font-semibold text-terracotta">
             {categoryLabel(place.category)}
           </span>
           <span className="min-w-0 flex-1">
