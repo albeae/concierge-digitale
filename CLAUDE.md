@@ -17,7 +17,7 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 | `src/app/page.tsx` | Root: redirect al primo B&B (ISR 300s; 404 se DB vuoto) |
 | `src/app/admin/**` | Area titolare: login, dashboard, editor, stampa QR (`force-dynamic`, `robots: noindex`) |
 | `src/app/admin/actions.ts` | Server action `login`/`logout` |
-| `src/app/admin/[bnbId]/actions.ts` | Server action di scrittura (dati generali, contenuti, posti, upload immagini, delete feedback) |
+| `src/app/admin/[bnbId]/actions.ts` | Server action di scrittura (dati generali, contenuti, posti, riordino posti, upload immagini, delete feedback) |
 | `src/proxy.ts` | "Middleware" di Next 16 (si chiama proxy): refresh sessione + redirect, solo `/admin/:path*` |
 | `src/lib/supabase.ts` | Client **anon puro** — SOLO pagine ospite (lettura) |
 | `src/lib/supabase-server.ts` | Client **server con cookie** — SOLO area admin (sessione titolare) |
@@ -31,12 +31,12 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 | `src/lib/brand.ts` / `recycling.ts` | Costanti: colori chrome PWA / colori cestini AMA (whitelist hex) |
 | `src/types/index.ts` | Tipi di dominio (`Bnb`, `Place`, `Localized<T>`, `BnbTheme`, …) |
 | `src/components/*.tsx` | UI ospite (BnbGuide + tab Home/Esplora/Info) |
-| `src/components/admin/*.tsx` | UI pannello (form, editor colori con anteprima live + guardia contrasto, upload immagini, QR/scheda stampa, lista feedback) |
+| `src/components/admin/*.tsx` | UI pannello (form, editor colori con anteprima+guardia contrasto+reset base, upload immagini, QR/scheda stampa, posti in lista compatta con riordino, lista feedback) |
 | `src/components/theme-provider.tsx` | Inietta il tema del B&B come CSS variables |
 | `supabase/schema.sql` | Fase 2: tabelle + RLS lettura + seed (applicato ✅) |
 | `supabase/phase-3-auth.sql` | Fase 3: policy di scrittura titolare (applicato ✅) |
-| `supabase/guest-feedback.sql` | Feedback ospiti: tabella + policy (insert anon, lettura/delete titolare) — **da applicare** |
-| `supabase/storage-images.sql` | Bucket `bnb-images` + policy per-cartella `<slug>` — **da applicare** |
+| `supabase/guest-feedback.sql` | Feedback ospiti: tabella + policy (insert anon, lettura/delete titolare) — applicato ✅ |
+| `supabase/storage-images.sql` | Bucket `bnb-images` + policy per-cartella `<slug>` — applicato ✅ |
 | `scripts/test-sql.mjs` | Test PGlite degli script SQL con stub auth/storage (`npm run test:sql`) |
 | `.github/workflows/ci.yml` | CI a ogni push: tsc, lint, test SQL, grep colori, build |
 | `public/sw.js`, `src/app/manifest.ts` | PWA: service worker (solo produzione) + manifest |
@@ -146,7 +146,9 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 **Il QR** codifica solo l'URL `https://dominio/<slug>`: tutta la logica è nel routing dinamico + query per slug. Si genera dall'editor (sezione "QR code e stampa"), con scheda A6 stampabile su `/admin/<slug>/stampa`.
 
-**SQL in attesa di apply** (l'utente li esegue nell'SQL Editor, in quest'ordine): `supabase/guest-feedback.sql`, `supabase/storage-images.sql`. Finché non sono applicati, l'invio feedback fallisce con toast di errore (il testo dell'ospite non si perde) e l'upload immagini risponde con l'errore spiegato; il resto dell'app non ne risente.
+**SQL applicati** (2026-07-10): `supabase/guest-feedback.sql` e `supabase/storage-images.sql` sono stati eseguiti in produzione → feedback e upload immagini pienamente attivi.
+
+**Dominio**: `albeaconcierge.it` collegato a Vercel (2026-07-10). `www` via CNAME `cname.vercel-dns.com`; l'apex via record A verso l'IP di Vercel (attenzione al nome del record su Register.it: dev'essere `albeaconcierge.it`, non `@.albeaconcierge.it`).
 
 ---
 
@@ -162,10 +164,13 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 - **Editor colori** (`theme-colors.tsx` + `color-picker-field.tsx` + `theme-preview.tsx`): gruppi Identità/Sfondi/Testo, picker react-colorful in popover, anteprima live sticky che riusa le stesse CSS variables del frontend vero.
 - **Contenuti multilingua nell'editor**: lo stato it/en/es viaggia in un campo hidden `payload` JSON; il server normalizza e applica la regola "en sempre, altre solo se non vuote".
 - **`sort_order` esplicito sui posti**: l'ordine è una scelta dell'host, non un artefatto del DB.
+- **Posti in lista compatta a fisarmonica** (`places-editor.tsx`): righe sintetiche (categoria a larghezza fissa per allineare i nomi, distanza) che si aprono al tap sul form completo; "+ Aggiungi un posto" mostra la scheda vuota solo su richiesta; oltre 3 posti la lista si collassa dietro "Vedi tutti".
+- **Riordino posti client-authoritative + ottimistico**: le frecce ↑↓ riordinano la lista SUBITO nel client (stato locale, `setItems`) e in background la server action `reorderPlaces` riceve l'ordine COMPLETO e riscrive `sort_order = posizione`. Così niente attesa/refresh percepiti, niente race tra click rapidi (l'ultimo ordine vince) e nessun problema con ordini duplicati; su errore si fa rollback + `router.refresh`. Ha sostituito il vecchio `movePlace` "sposta di uno" (che con i duplicati trascinava altri posti).
 - **Feedback ospiti solo-scrittura**: l'anon può inserire ma MAI leggere (`guest_feedback` senza policy select per anon); l'invio passa da una server action guest col client anon, così validazione e log stanno sul server ma la pagina resta statica.
 - **Storage per-cartella**: bucket pubblico `bnb-images`, percorsi `<slug>/<tipo>-<timestamp>` e policy che confrontano `(storage.foldername(objects.name))[1]` con le strutture possedute. Nome file sempre nuovo: mai combattere la cache CDN con l'upsert.
 - **QR generato nel browser** con `window.location.origin`: l'admin gira sullo stesso deploy della guest, quindi in produzione l'URL è quello vero senza config. Colori fissi nero/bianco (non a tema): un QR a basso contrasto non si scansiona.
-- **Guardia contrasto a due livelli** (3:1 rosso, 4.5:1 soft): la palette di fabbrica sta a 4.3 sul colore principale — un allarme rosso permanente insegnerebbe a ignorare gli avvisi.
+- **Guardia contrasto per tipo di testo** (`theme-preview.tsx`): ogni coppia testo/sfondo ha la sua soglia — 4.5 per il testo di lettura (paragrafi su sfondi), 3 per il testo grande su colore (header, pulsanti). Due livelli d'avviso: rosso sotto 3, soft tra 3 e la soglia. Così il tema di fabbrica (bianco su terracotta ≈ 4.3) NON viene segnalato (si legge benissimo, ed è testo grande). La coppia del micro-badge accento è esclusa (decorativa, dava un rosso fisso).
+- **Pulsante "Colori base"** nel theme selector: reimposta gli 8 colori alla palette base dell'app (`BASE_COLORS` in `theme-colors.tsx`, gli stessi dell'interfaccia admin/`:root`). Solo stato locale → l'utente vede l'anteprima e poi salva; serve a chiunque abbia pasticciato i colori durante le prove.
 - **Stack**: Next.js 16 (App Router, Turbopack), Tailwind v4, shadcn/ui (base-nova, icone lucide), sonner per i toast (riscritto senza next-themes), `qrcode` per i QR, PWA con SW network-first (`public/sw.js`, solo produzione).
 - **Manifest/chrome PWA**: colori statici da `brand.ts` (il manifest è unico per l'app, non per-tenant).
 
@@ -176,7 +181,7 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 1. **Colori del tema non validati server-side**: `updateBnbGeneral` salva qualsiasi stringa; un valore malformato produce CSS variables spazzatura (tema rotto, non un exploit: React le confina nel valore della proprietà). Aggiungere validazione `#rrggbb` nell'action (ora c'è `src/lib/contrast.ts` con la regex pronta).
 2. **Link Google Reviews placeholder** (`placeid=PLACEHOLDER` in `review-module.tsx`): andrà per-struttura nel DB.
 3. **Meteo finto** nel widget Home (l'orologio invece è reale). Serve un'API.
-4. **Contrasto di fabbrica del badge ZTL**: la guardia contrasto segnala (giustamente) 2.3:1 per `primaryForeground` su `secondaryColor`, usati dal badge "Attenzione ZTL". O si scurisce l'ocra del seed o il badge passa a testo scuro.
+4. **Contrasto di fabbrica del badge ZTL/accento**: `primaryForeground` su `secondaryColor` (ocra) è ~2.3:1 — leggibile a fatica. La guardia contrasto non lo segnala più (coppia esclusa perché micro-badge decorativo), ma resta un miglioramento estetico: scurire l'ocra del seed o passare il badge a testo scuro.
 5. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
 6. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
 7. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
@@ -186,6 +191,8 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 **Risolti** (2026-07-08): `image_url` dei posti non usa più `next/image` (che senza `remotePatterns` crashava la pagina) ma un `<img>` con fallback all'emoji su `onError` — nessun URL può più rompere la guest; `maximumScale: 1` rimosso dal viewport (pinch-zoom libero).
 
 **Risolti** (2026-07-09): il feedback 1–3 stelle viene salvato in `guest_feedback` e letto dall'admin (era il debito n. 1); i selettori colore non sbordano più a destra su telefono (tripla causa: `min-width: min-content` dei fieldset con hint in nowrap, popover a larghezza fissa, zoom automatico di iOS sugli input sotto i 16px).
+
+**Risolti** (2026-07-10): riordino posti che "trascinava" altri posti (era lo scambio secco dei `sort_order` con duplicati → ora `reorderPlaces` riscrive l'ordine completo, con update ottimistico per la velocità); frecce di riordino ingrandite (28→36px, con bordo) per il tocco su mobile; nomi dei posti allineati (badge categoria a larghezza fissa); guardia contrasto senza falsi allarmi sul tema di fabbrica (soglia per tipo di testo); pulsante "Colori base" per resettare il tema.
 
 ---
 
