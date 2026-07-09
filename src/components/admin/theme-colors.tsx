@@ -1,21 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { ColorPickerField } from "@/components/admin/color-picker-field";
 import { ThemePreview, type ThemeColorValues } from "@/components/admin/theme-preview";
+import { Button } from "@/components/ui/button";
 import type { BnbTheme } from "@/types";
 
-// Default (hex) dei colori aggiunti in Fase 3, allineati alla palette di base:
-// una struttura che non li ha ancora parte dall'aspetto attuale.
-const DEFAULTS = {
+type ColorState = ThemeColorValues;
+
+/**
+ * Palette base dell'app: gli stessi colori dell'interfaccia admin (la palette
+ * `:root` di globals.css, in hex per conversione da oklch — non a occhio).
+ * Serve sia come default quando una struttura non ha un colore opzionale, sia
+ * per il pulsante "Ripristina colori base".
+ */
+const BASE_COLORS: ColorState = {
+  primaryColor: "#b85c3c",
   primaryForeground: "#fef9f3",
-  textColor: "#3d281f",
-  mutedColor: "#765f53",
+  secondaryColor: "#d99a3c",
+  backgroundColor: "#fbf4ea",
   cardColor: "#fffcf8",
   sectionColor: "#f7e5cf",
-} as const;
-
-type ColorState = ThemeColorValues;
+  textColor: "#3d281f",
+  mutedColor: "#765f53",
+};
 
 const GROUPS: {
   title: string;
@@ -49,13 +58,13 @@ const GROUPS: {
 export function ThemeColors({ theme }: { theme: BnbTheme }) {
   const [colors, setColors] = useState<ColorState>({
     primaryColor: theme.primaryColor,
-    primaryForeground: theme.primaryForeground ?? DEFAULTS.primaryForeground,
+    primaryForeground: theme.primaryForeground ?? BASE_COLORS.primaryForeground,
     secondaryColor: theme.secondaryColor,
     backgroundColor: theme.backgroundColor,
-    cardColor: theme.cardColor ?? DEFAULTS.cardColor,
-    sectionColor: theme.sectionColor ?? DEFAULTS.sectionColor,
-    textColor: theme.textColor ?? DEFAULTS.textColor,
-    mutedColor: theme.mutedColor ?? DEFAULTS.mutedColor,
+    cardColor: theme.cardColor ?? BASE_COLORS.cardColor,
+    sectionColor: theme.sectionColor ?? BASE_COLORS.sectionColor,
+    textColor: theme.textColor ?? BASE_COLORS.textColor,
+    mutedColor: theme.mutedColor ?? BASE_COLORS.mutedColor,
   });
 
   const setColor = (name: keyof ColorState) => (value: string) =>
@@ -63,11 +72,25 @@ export function ThemeColors({ theme }: { theme: BnbTheme }) {
 
   return (
     <div className="space-y-5 rounded-2xl border border-border bg-secondary/30 p-4">
-      <div>
-        <h3 className="text-sm font-bold tracking-tight">Colori del tema</h3>
-        <p className="text-xs text-muted-foreground">
-          Clicca un quadratino per aprire il selettore, o incolla un codice hex.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold tracking-tight">Colori del tema</h3>
+          <p className="text-xs text-muted-foreground">
+            Clicca un quadratino per aprire il selettore, o incolla un codice hex.
+          </p>
+        </div>
+        {/* Reimposta gli 8 colori alla palette base dell'app. Solo lo stato
+            locale: l'utente vede l'anteprima aggiornarsi e poi salva il form. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setColors(BASE_COLORS)}
+          className="h-9 shrink-0 gap-1.5 rounded-xl"
+        >
+          <RotateCcw className="size-4" aria-hidden />
+          Colori base
+        </Button>
       </div>
 
       <ThemePreview colors={colors} />
