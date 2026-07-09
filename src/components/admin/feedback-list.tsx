@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { Star, Trash2 } from "lucide-react";
+import { useActionState, useState } from "react";
+import { ChevronDown, Star, Trash2 } from "lucide-react";
 import { deleteFeedback } from "@/app/admin/[bnbId]/actions";
 import { StatusMessage } from "@/components/admin/form-bits";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,9 @@ function FeedbackCard({ bnbId, item }: { bnbId: string; item: GuestFeedback }) {
   );
 }
 
+/** Oltre questo numero di feedback la lista si collassa dietro un "Vedi tutti". */
+const FEEDBACK_VISIBLE = 3;
+
 /**
  * Lista dei feedback privati (voti 1-3) lasciati dagli ospiti dalla pagina
  * guest. Solo lettura + eliminazione: l'ospite scrive, il titolare gestisce.
@@ -102,6 +105,8 @@ export function FeedbackList({
   bnbId: string;
   feedback: GuestFeedback[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (feedback.length === 0) {
     return (
       <Card className="py-0">
@@ -116,11 +121,35 @@ export function FeedbackList({
     );
   }
 
+  // I feedback arrivano dal più recente: se sono tanti se ne mostrano i primi
+  // pochi, gli altri dietro "Vedi tutti".
+  const collapsible = feedback.length > FEEDBACK_VISIBLE;
+  const visible =
+    collapsible && !expanded ? feedback.slice(0, FEEDBACK_VISIBLE) : feedback;
+  const hiddenCount = feedback.length - visible.length;
+
   return (
     <div className="space-y-3">
-      {feedback.map((item) => (
+      {visible.map((item) => (
         <FeedbackCard key={item.id} bnbId={bnbId} item={item} />
       ))}
+
+      {collapsible && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setExpanded((v) => !v)}
+          className="h-11 w-full gap-2 rounded-2xl font-semibold"
+        >
+          <ChevronDown
+            className={cn("size-4 transition-transform", expanded && "rotate-180")}
+            aria-hidden
+          />
+          {expanded
+            ? "Mostra meno"
+            : `Vedi tutti i feedback (altri ${hiddenCount})`}
+        </Button>
+      )}
     </div>
   );
 }

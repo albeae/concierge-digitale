@@ -1,13 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import { deletePlace, upsertPlace } from "@/app/admin/[bnbId]/actions";
 import { FieldRow, Input, Label, Select, Textarea } from "@/components/admin/field";
 import { StatusMessage } from "@/components/admin/form-bits";
 import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { Place, PlaceCategory } from "@/types";
 
 const CATEGORIES: { value: PlaceCategory; label: string }[] = [
@@ -198,6 +199,9 @@ function DeletePlaceForm({ bnbId, place }: { bnbId: string; place: Place }) {
   );
 }
 
+/** Oltre questo numero di posti la lista si collassa dietro un "Vedi tutti". */
+const PLACES_VISIBLE = 3;
+
 export function PlacesEditor({
   bnbId,
   places,
@@ -206,12 +210,36 @@ export function PlacesEditor({
   places: Place[];
 }) {
   const nextSort = places.reduce((max, p) => Math.max(max, p.sortOrder), 0) + 1;
+  const [expanded, setExpanded] = useState(false);
+
+  // Quando i posti sono tanti, in modifica se ne mostrano i primi pochi: il
+  // form "aggiungi nuovo" resta sempre raggiungibile senza scorrere all'infinito.
+  const collapsible = places.length > PLACES_VISIBLE;
+  const visible = collapsible && !expanded ? places.slice(0, PLACES_VISIBLE) : places;
+  const hiddenCount = places.length - visible.length;
 
   return (
     <div className="space-y-4">
-      {places.map((place) => (
+      {visible.map((place) => (
         <PlaceForm key={place.id} bnbId={bnbId} place={place} />
       ))}
+
+      {collapsible && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setExpanded((v) => !v)}
+          className="h-11 w-full gap-2 rounded-2xl font-semibold"
+        >
+          <ChevronDown
+            className={cn("size-4 transition-transform", expanded && "rotate-180")}
+            aria-hidden
+          />
+          {expanded
+            ? "Mostra meno"
+            : `Vedi tutti i posti (altri ${hiddenCount})`}
+        </Button>
+      )}
 
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-muted-foreground">

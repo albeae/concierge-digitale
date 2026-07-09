@@ -50,7 +50,10 @@ export function ColorPickerField({
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-2.5">
+      {/* flex-wrap su mobile: swatch + testo sulla prima riga, hex input a
+          tutta larghezza sotto (così nome e descrizione NON vengono tagliati
+          dallo spazio stretto del telefono). Da sm in su torna tutto in linea. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-xl border border-border bg-card p-2.5 sm:flex-nowrap">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -60,10 +63,8 @@ export function ColorPickerField({
           style={{ backgroundColor: valid ? value : "#ffffff" }}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{label}</p>
-          {hint && (
-            <p className="truncate text-xs text-muted-foreground">{hint}</p>
-          )}
+          <p className="text-sm font-semibold">{label}</p>
+          {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
         </div>
         <Input
           name={name}
@@ -72,9 +73,10 @@ export function ColorPickerField({
           aria-label={`${label}: codice colore`}
           spellCheck={false}
           className={cn(
-            // text-base su mobile: sotto i 16px iOS zooma la pagina al tocco
-            // e i campi "escono" dallo schermo verso destra.
-            "w-28 shrink-0 font-mono text-base uppercase sm:text-xs",
+            // w-full su mobile (l'input va sulla sua riga, sotto al testo);
+            // w-28 in linea da sm in su. text-base su mobile: sotto i 16px iOS
+            // zooma la pagina al tocco e i campi "escono" dallo schermo.
+            "w-full shrink-0 font-mono text-base uppercase sm:w-28 sm:text-xs",
             !valid && "border-destructive/60",
           )}
         />

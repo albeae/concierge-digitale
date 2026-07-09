@@ -2,6 +2,7 @@
  * Campi di form minimi e coerenti col tema (usano i token globali: `border`,
  * `bg-card`, `ring`, ecc.). Niente dipendenze nuove: bastano per l'admin.
  */
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // text-base su mobile, text-sm da sm in su: sotto i 16px iOS Safari zooma la
@@ -44,7 +45,23 @@ export function Select({
   className,
   ...props
 }: React.ComponentProps<"select">) {
-  return <select className={cn(baseField, "appearance-none", className)} {...props} />;
+  // `appearance-none` toglie la freccia nativa (che varia tra i browser e su
+  // iOS sembra un campo di testo): la rimpiazziamo con una ChevronDown a
+  // destra, così si capisce a colpo d'occhio che è un menu a tendina.
+  // `pr-10` lascia spazio all'icona; `pointer-events-none` fa passare il click
+  // al select sottostante.
+  return (
+    <div className="relative">
+      <select
+        className={cn(baseField, "appearance-none pr-10", className)}
+        {...props}
+      />
+      <ChevronDown
+        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden
+      />
+    </div>
+  );
 }
 
 /** Etichetta + campo impilati, con spaziatura uniforme. */
