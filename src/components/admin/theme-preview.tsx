@@ -17,31 +17,41 @@ export interface ThemeColorValues {
 /**
  * Le coppie testo/sfondo davvero usate nella pagina ospite: sono quelle da
  * tenere leggibili. Le etichette ricalcano i nomi dei campi dell'editor.
+ *
+ * `min` è la soglia WCAG adatta al TIPO di testo di quella coppia:
+ *  - 4.5 per il testo di lettura (paragrafi, didascalie su sfondi);
+ *  - 3 per il testo grande/grassetto su superfici colorate (nome struttura
+ *    nell'header, pulsanti, label Wi-Fi): per il testo grande la soglia AA è
+ *    proprio 3, quindi il tema di fabbrica (bianco su terracotta ≈ 4.3) NON
+ *    deve essere segnalato — si legge benissimo.
+ *
+ * Il badge "accento" (testo sui colori sopra il colore accento) è un micro
+ * elemento decorativo e non entra qui: segnalarlo dava un falso allarme fisso.
  */
 const CONTRAST_PAIRS: {
   fg: keyof ThemeColorValues;
   bg: keyof ThemeColorValues;
   label: string;
+  min: number;
 }[] = [
-  { fg: "textColor", bg: "backgroundColor", label: "Testo principale su Sfondo pagina" },
-  { fg: "textColor", bg: "cardColor", label: "Testo principale su Sfondo riquadri" },
-  { fg: "mutedColor", bg: "backgroundColor", label: "Testo secondario su Sfondo pagina" },
-  { fg: "mutedColor", bg: "cardColor", label: "Testo secondario su Sfondo riquadri" },
-  { fg: "primaryForeground", bg: "primaryColor", label: "Testo sui colori su Colore principale" },
-  { fg: "primaryForeground", bg: "secondaryColor", label: "Testo sui colori su Colore accento" },
+  { fg: "textColor", bg: "backgroundColor", label: "Testo principale su Sfondo pagina", min: WCAG_AA_MIN },
+  { fg: "textColor", bg: "cardColor", label: "Testo principale su Sfondo riquadri", min: WCAG_AA_MIN },
+  { fg: "mutedColor", bg: "backgroundColor", label: "Testo secondario su Sfondo pagina", min: WCAG_AA_MIN },
+  { fg: "mutedColor", bg: "cardColor", label: "Testo secondario su Sfondo riquadri", min: WCAG_AA_MIN },
+  { fg: "primaryForeground", bg: "primaryColor", label: "Testo sui colori su Colore principale", min: WCAG_AA_LARGE },
 ];
 
 /**
- * Guardia di contrasto WCAG su due livelli: sotto 3:1 (soglia AA anche per il
- * testo grande) l'avviso è rosso — quel testo è illeggibile quasi ovunque;
- * tra 3 e 4.5 (soglia AA per il testo normale) è un suggerimento soft.
- * I campi con hex non ancora validi vengono semplicemente saltati.
+ * Guardia di contrasto WCAG. Ogni coppia ha la sua soglia (`min`) in base al
+ * tipo di testo. Due livelli d'avviso: sotto 3:1 è rosso (illeggibile quasi
+ * ovunque), tra 3 e la soglia della coppia è un suggerimento soft. I campi con
+ * hex non ancora validi vengono semplicemente saltati.
  */
 function ContrastWarnings({ colors }: { colors: ThemeColorValues }) {
   const issues = CONTRAST_PAIRS.flatMap((pair) => {
     const ratio = contrastRatio(colors[pair.fg], colors[pair.bg]);
-    return ratio !== null && ratio < WCAG_AA_MIN
-      ? [{ label: pair.label, ratio, severe: ratio < WCAG_AA_LARGE }]
+    return ratio !== null && ratio < pair.min
+      ? [{ label: pair.label, ratio, min: pair.min, severe: ratio < WCAG_AA_LARGE }]
       : [];
   });
 
@@ -69,7 +79,7 @@ function ContrastWarnings({ colors }: { colors: ThemeColorValues }) {
           <span>
             {issue.severe
               ? `${issue.label}: contrasto ${issue.ratio.toFixed(1)} — testo quasi illeggibile, cambia uno dei due colori.`
-              : `${issue.label}: contrasto ${issue.ratio.toFixed(1)}, sotto il consigliato ${WCAG_AA_MIN}. Meglio aumentare un po' lo stacco.`}
+              : `${issue.label}: contrasto ${issue.ratio.toFixed(1)}, sotto il consigliato ${issue.min}. Meglio aumentare un po' lo stacco.`}
           </span>
         </li>
       ))}
