@@ -20,6 +20,17 @@
 -- della Fase 3 continua ad applicarsi. In più c'è un controllo esplicito di
 -- proprietà (difesa in profondità, come le server action che fanno
 -- getOwnedBnb prima di scrivere).
+--
+-- Concorrenza: la riga di bnb_clients viene bloccata con `for update` PRIMA
+-- di contare i posti, non solo per il controllo di proprietà. Questo serializza
+-- due riordini concorrenti sulla STESSA struttura (il secondo aspetta che il
+-- primo finisca la transazione, niente interleaving tra "conta" e "scrivi") e,
+-- grazie al lock che il vincolo FK di restaurants.bnb_client_id prende sulla
+-- riga padre, blocca anche un INSERT concorrente di un nuovo posto finché
+-- questa transazione non commit. Senza il lock, un posto potrebbe apparire
+-- tra la validazione della permutazione e la UPDATE, senza però corrompere
+-- nulla (l'UPDATE tocca solo gli id ricevuti) — il lock chiude comunque la
+-- finestra invece di limitarsi a "non è grave".
 -- ============================================================================
 
 create or replace function public.reorder_places(
@@ -36,11 +47,12 @@ declare
   v_arg_count      int := coalesce(array_length(p_ordered_ids, 1), 0);
   v_distinct_count int;
 begin
-  -- Proprietà esplicita: la struttura deve essere del titolare loggato.
-  if not exists (
-    select 1 from public.bnb_clients b
+  -- Proprietà esplicita + lock: la riga del B&B viene bloccata qui, prima di
+  -- contare i posti, e resta bloccata fino a fine transazione.
+  perform 1 from public.bnb_clients b
     where b.id = p_bnb_id and b.owner_id = auth.uid()
-  ) then
+    for update;
+  if not found then
     raise exception 'reorder_places: struttura inesistente o non posseduta'
       using errcode = 'check_violation';
   end if;
@@ -80,4 +92,10 @@ begin
 end;
 $$;
 
+-- Postgres concede EXECUTE a PUBLIC per default su ogni funzione nuova: il solo
+-- grant qui sotto NON lo toglie. Il controllo di proprietà dentro la funzione
+-- impedisce già scritture da anon (non ha owner_id da far combaciare), quindi
+-- non è una falla diretta — ma lasciare la funzione invocabile da chiunque è
+-- superficie inutile. Revoca esplicita, poi grant solo a chi serve.
+revoke execute on function public.reorder_places(text, text[]) from public;
 grant execute on function public.reorder_places(text, text[]) to authenticated;

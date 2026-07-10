@@ -261,6 +261,25 @@ ok(grSeed.rows[0].google_reviews_url === "", "Casa Rossa parte con link recensio
 
 console.log("\nAssertion su reorder_places (riordino atomico):");
 
+// Postgres concede EXECUTE a PUBLIC per default: verifichiamo che il revoke
+// esplicito nello script l'abbia tolto, e che authenticated ce l'abbia.
+const canExecute = async (role) =>
+  (
+    await db.query(
+      "select has_function_privilege($1, 'public.reorder_places(text, text[])', 'execute') as ok",
+      [role],
+    )
+  ).rows[0].ok;
+ok((await canExecute("public")) === false, "EXECUTE revocato a PUBLIC (non basta il solo grant ad authenticated)");
+ok((await canExecute("authenticated")) === true, "EXECUTE concesso ad authenticated");
+
+// anon non può nemmeno chiamarla (oltre al controllo owner_id, la grant manca).
+await expectError("anon non può eseguire reorder_places (nessuna grant)", () =>
+  asRole("anon", null, () =>
+    db.query("select public.reorder_places('casa-rossa', array['x']::text[])"),
+  ),
+);
+
 // Gli id reali del seed di Casa Rossa (7 posti).
 const PLACE_IDS = [
   "place-nonna-rosa",

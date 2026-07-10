@@ -81,7 +81,7 @@ azione **Log** per osservare il traffico qualche giorno prima di passare a
 Firewall → overview → seleziona la Custom Rule dal raggruppamento del traffico
 e controlla che i POST bloccati compaiano come attesi. In alternativa, da un
 terminale, ripetere >10 POST in un minuto verso una pagina guest e verificare
-il `429`.
+il `403` (azione "Deny" configurata sopra).
 
 ## Limiti noti (Hobby)
 
