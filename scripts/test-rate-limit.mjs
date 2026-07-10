@@ -9,7 +9,13 @@
  *
  * Uso:  npm run test:unit   (esce con codice 1 se un'assertion fallisce)
  */
-import { isRateLimited, __resetForTests } from "../src/lib/rate-limit.ts";
+import {
+  isRateLimited,
+  __resetForTests,
+  __bucketCountForTests,
+} from "../src/lib/rate-limit.ts";
+
+const MAX_BUCKETS = 10_000;
 
 let failures = 0;
 
@@ -57,19 +63,16 @@ __resetForTests();
 }
 
 // 4. Tetto di memoria: un flood di chiavi DISTINTE non fa crescere la Map
-//    all'infinito. Inseriamo molte più chiavi del tetto e controlliamo che
-//    una chiave "calda" continui comunque a funzionare (il limite tiene).
+//    all'infinito. Inseriamo molte più chiavi del tetto e verifichiamo
+//    ESPLICITAMENTE che la size resti sotto MAX (senza il tetto sarebbe 20k).
 __resetForTests();
 {
-  // 20k chiavi distinte, tutte a finestra lunga (nessuna scade durante il test):
-  // se non ci fosse il tetto, la Map crescerebbe fino a 20k voci.
   for (let i = 0; i < 20_000; i++) {
     isRateLimited(`flood:${i}`, 5, 60 * 60 * 1000);
   }
-  // Il modulo non espone la size, ma un flood senza tetto sarebbe ~20k voci
-  // (diversi MB) e degraderebbe l'ordinamento allo sfratto; qui verifichiamo
-  // il comportamento osservabile: una chiave nuova continua a rispettare il
-  // limite senza errori né rallentamenti patologici.
+  const size = __bucketCountForTests();
+  ok(size <= MAX_BUCKETS, `la Map resta sotto il tetto dopo 20k chiavi (size=${size} ≤ ${MAX_BUCKETS})`);
+
   const t0 = Date.now();
   let allowed = 0;
   for (let i = 0; i < 7; i++) {
@@ -78,6 +81,25 @@ __resetForTests();
   const elapsed = Date.now() - t0;
   ok(allowed === 5, `dopo il flood il limite tiene ancora (allowed=${allowed})`);
   ok(elapsed < 1000, `nessun degrado patologico dopo il flood (${elapsed}ms)`);
+}
+
+// 5. LRU: una chiave toccata di continuo NON viene sfrattata da un flood di
+//    chiavi nuove (è il caso del contatore per-struttura, che protegge i
+//    costi ed è toccato a ogni invio). La creiamo, poi la teniamo "calda"
+//    durante il flood, infine verifichiamo che il suo conteggio sia intatto.
+__resetForTests();
+{
+  // Riempi con 15 sul contatore "struttura" (limite alto per non bloccarlo).
+  for (let i = 0; i < 15; i++) isRateLimited("bnb:casa-rossa", 1000, 60 * 60 * 1000);
+  // Flood di chiavi nuove, ritoccando la chiave calda ogni tanto.
+  for (let i = 0; i < 20_000; i++) {
+    isRateLimited(`flood2:${i}`, 5, 60 * 60 * 1000);
+    if (i % 500 === 0) isRateLimited("bnb:casa-rossa", 1000, 60 * 60 * 1000);
+  }
+  // Se fosse stata sfrattata, il conteggio ripartirebbe da 1 e non supererebbe
+  // mai un limite basso; qui invece deve aver accumulato (>15) senza reset.
+  const blocked = isRateLimited("bnb:casa-rossa", 20, 60 * 60 * 1000);
+  ok(blocked === true, "la chiave calda sopravvive al flood (contatore non azzerato dallo sfratto)");
 }
 
 if (failures > 0) {

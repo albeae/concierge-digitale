@@ -9,13 +9,18 @@
  * rate limit di Vercel), prima ancora che la funzione parta. Vedi la nota
  * nel CLAUDE.md (review Codex #2): questo modulo è la seconda barriera.
  *
- * Difesa contro l'esaurimento memoria: un attacco con tanti IP DISTINTI nella
- * stessa finestra riempirebbe la Map di bucket ancora "vivi" (non scaduti),
- * che la sola pulizia degli scaduti non toglierebbe. Perciò c'è un tetto
- * rigido `MAX_BUCKETS`: superato quello, si sfrattano i bucket più vicini a
- * scadere (perdono meno informazione e sono tipicamente quelli per-IP a
- * finestra breve, non il contatore per-struttura a finestra lunga che
- * protegge i costi). Così la memoria resta limitata comunque vada.
+ * Memoria limitata + CPU limitata (LRU su Map):
+ *  - un attacco con tanti IP DISTINTI riempirebbe la Map di bucket ancora
+ *    "vivi": senza tetto crescerebbe all'infinito (DoS di memoria);
+ *  - ordinare tutti i bucket a ogni saturazione per sfrattare i più vecchi
+ *    sarebbe O(n log n) ripetuto durante un flood (DoS di CPU).
+ * Soluzione: la `Map` di JS conserva l'ordine di inserimento; a ogni accesso
+ * spostiamo il bucket in coda (delete+set = O(1)), così l'ordine diventa
+ * "meno usato di recente → in testa". Al tetto `MAX_BUCKETS` sfrattiamo un
+ * blocco dalla testa in O(batch), senza alcun sort. Vantaggio extra: il
+ * contatore per-struttura, toccato a OGNI invio, resta sempre in coda e non
+ * viene mai sfrattato — è quello che protegge i costi, il più importante da
+ * tenere. Sotto sfratto cadono per primi i bucket per-IP mordi-e-fuggi.
  */
 
 type Bucket = { count: number; resetAt: number };
@@ -26,22 +31,22 @@ const buckets = new Map<string, Bucket>();
 // una Map che cresce senza limiti durante un flood di IP distinti.
 const MAX_BUCKETS = 10_000;
 
-function sweepExpired(now: number) {
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
+// Sposta una chiave in coda alla Map: diventa "usata di recente".
+function touch(key: string, bucket: Bucket) {
+  buckets.delete(key);
+  buckets.set(key, bucket);
 }
 
-// Chiamata solo quando siamo al tetto e stiamo per inserire una chiave nuova:
-// libera spazio sfrattando i bucket più vicini alla scadenza.
-function evictOldest() {
-  const soonestFirst = [...buckets.entries()].sort(
-    (a, b) => a[1].resetAt - b[1].resetAt,
-  );
-  const toRemove = Math.max(1, Math.floor(MAX_BUCKETS / 10));
-  for (let i = 0; i < toRemove && i < soonestFirst.length; i++) {
-    buckets.delete(soonestFirst[i][0]);
+// Chiamata solo al tetto, prima di inserire una chiave nuova: sfratta un
+// blocco dalla TESTA (i meno usati di recente) in O(batch), senza sort.
+function evictLeastRecentlyUsed() {
+  const batch = Math.max(1, Math.floor(MAX_BUCKETS / 10));
+  const doomed: string[] = [];
+  for (const key of buckets.keys()) {
+    doomed.push(key);
+    if (doomed.length >= batch) break;
   }
+  for (const key of doomed) buckets.delete(key);
 }
 
 /** true = richiesta da bloccare (limite superato per questa finestra). */
@@ -50,17 +55,16 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
 
   const bucket = buckets.get(key);
   if (bucket && bucket.resetAt > now) {
-    // Finestra ancora aperta per questa chiave: incrementa e verifica.
+    // Finestra ancora aperta: incrementa, tieni la chiave "calda" e verifica.
     bucket.count += 1;
+    touch(key, bucket);
     return bucket.count > limit;
   }
 
-  // Chiave nuova (o finestra scaduta): serve un bucket fresco. Prima di
-  // aggiungerlo teniamo la Map sotto controllo.
-  if (buckets.size >= MAX_BUCKETS) {
-    sweepExpired(now);
-    if (buckets.size >= MAX_BUCKETS) evictOldest();
-  }
+  // Chiave nuova (o finestra scaduta): serve un bucket fresco. Se eravamo al
+  // tetto liberiamo spazio prima di aggiungerlo.
+  if (bucket) buckets.delete(key); // scaduto: via quello vecchio
+  if (buckets.size >= MAX_BUCKETS) evictLeastRecentlyUsed();
 
   buckets.set(key, { count: 1, resetAt: now + windowMs });
   return false;
@@ -69,4 +73,9 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
 /** Solo per i test: azzera lo stato tra un caso e l'altro. */
 export function __resetForTests() {
   buckets.clear();
+}
+
+/** Solo per i test: quante chiavi sono in memoria (per verificare il tetto). */
+export function __bucketCountForTests(): number {
+  return buckets.size;
 }
