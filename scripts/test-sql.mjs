@@ -120,7 +120,12 @@ await db.query("update public.bnb_clients set owner_id = $1 where id = 'casa-ros
 // ---------------------------------------------------------------------------
 // 3. Script nuovi: DUE esecuzioni ciascuno (devono essere idempotenti).
 // ---------------------------------------------------------------------------
-for (const file of ["guest-feedback.sql", "storage-images.sql", "google-reviews.sql"]) {
+for (const file of [
+  "guest-feedback.sql",
+  "storage-images.sql",
+  "google-reviews.sql",
+  "reorder-places.sql",
+]) {
   console.log(`Eseguo ${file} (due volte, per l'idempotenza)…`);
   const text = await sql(file);
   await db.exec(text);
@@ -253,6 +258,71 @@ const grCol = await db.query(
 ok(grCol.rows.length === 1 && grCol.rows[0].is_nullable === "NO", "colonna google_reviews_url presente e NOT NULL");
 const grSeed = await db.query("select google_reviews_url from public.bnb_clients where id = 'casa-rossa'");
 ok(grSeed.rows[0].google_reviews_url === "", "Casa Rossa parte con link recensioni vuoto (default)");
+
+console.log("\nAssertion su reorder_places (riordino atomico):");
+
+// Gli id reali del seed di Casa Rossa (7 posti).
+const PLACE_IDS = [
+  "place-nonna-rosa",
+  "place-forno-vicolo",
+  "place-osteria-sisto",
+  "place-gelateria-fonte",
+  "place-enoteca-santa-maria",
+  "place-farmacia-gallicano",
+  "place-alimentari-marco",
+];
+
+const callReorder = (uid, ids) =>
+  asRole("authenticated", uid, () =>
+    db.query("select public.reorder_places('casa-rossa', $1::text[])", [ids]),
+  );
+
+const readOrder = async () =>
+  (
+    await db.query(
+      "select id, sort_order from public.restaurants where bnb_client_id = 'casa-rossa' order by sort_order",
+    )
+  ).rows;
+
+// Permutazione valida: inverto l'ordine → sort_order deve diventare 0..n-1.
+const reversed = [...PLACE_IDS].reverse();
+await callReorder(OWNER, reversed);
+const afterReverse = await readOrder();
+ok(
+  afterReverse.length === 7 &&
+    afterReverse.every((r, i) => r.id === reversed[i] && Number(r.sort_order) === i),
+  "permutazione valida: sort_order = posizione 0..n-1 nell'ordine richiesto",
+);
+
+// Lista PARZIALE (manca un id): rifiutata, e l'ordine NON cambia (atomicità).
+await expectError("lista parziale rifiutata", () => callReorder(OWNER, reversed.slice(0, 6)));
+const afterPartial = await readOrder();
+ok(
+  afterPartial.every((r, i) => r.id === reversed[i] && Number(r.sort_order) === i),
+  "dopo una lista parziale l'ordine resta invariato (nessuna scrittura parziale)",
+);
+
+// Lista con id DUPLICATO: rifiutata.
+const withDup = [...reversed];
+withDup[1] = withDup[0];
+await expectError("lista con id duplicato rifiutata", () => callReorder(OWNER, withDup));
+
+// Lista con un id ESTRANEO (non della struttura): rifiutata.
+const withForeign = [...reversed];
+withForeign[0] = "place-non-esiste";
+await expectError("lista con id estraneo rifiutata", () => callReorder(OWNER, withForeign));
+
+// Un ALTRO titolare non può riordinare i posti altrui (controllo proprietà).
+await expectError("un ALTRO titolare non riordina i posti altrui", () =>
+  callReorder(OTHER, reversed),
+);
+
+// Dopo tutti i tentativi falliti l'ordine è ancora quello dell'unico valido.
+const finalOrder = await readOrder();
+ok(
+  finalOrder.every((r, i) => r.id === reversed[i] && Number(r.sort_order) === i),
+  "dopo i tentativi falliti l'ordine è ancora l'ultimo valido (nessun effetto parziale)",
+);
 
 // ---------------------------------------------------------------------------
 console.log("");

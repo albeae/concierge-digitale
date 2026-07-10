@@ -1,11 +1,15 @@
 # ============================================================================
 # CI (idea n. 5): trasforma la quality bar del CLAUDE.md (sezione 5) da
-# disciplina volontaria a cancello automatico. Gira a ogni push, su qualsiasi
-# branch: `main` deploya in produzione su Vercel, meglio saperlo PRIMA.
+# disciplina volontaria a cancello automatico. Gira a ogni push (su qualsiasi
+# branch: `main` deploya in produzione su Vercel, meglio saperlo PRIMA) e su
+# ogni pull_request (review Codex #5): così una PR verso `main` viene
+# verificata PRIMA del merge. Per rendere il cancello davvero vincolante va
+# attivata la branch protection su GitHub (vedi CLAUDE.md): richiedere questa
+# CI verde prima del merge impedisce che un deploy parta con la CI rossa.
 # ============================================================================
 name: CI
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   verifica:

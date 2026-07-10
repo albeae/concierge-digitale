@@ -11,6 +11,7 @@
 import { revalidatePath } from "next/cache";
 import { getOwnedBnb } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isGoogleUrl, isImageRef } from "@/lib/url-validation";
 import type {
   BnbContent,
   BnbLocation,
@@ -53,13 +54,25 @@ export async function updateBnbGeneral(
   const name = str(formData.get("name"));
   if (!name) return { ok: false, error: "Il nome non può essere vuoto." };
 
+  // URL immagini del tema: se presenti devono essere https o path relativi
+  // (le immagini caricate danno https di Supabase; i default sono `/*.svg`).
+  // Un valore sbagliato non si salva in silenzio: errore chiaro nel form.
+  const logoUrl = str(formData.get("logoUrl"));
+  const heroImage = str(formData.get("heroImage"));
+  if (logoUrl && !isImageRef(logoUrl)) {
+    return { ok: false, error: "L'URL del logo deve iniziare con https:// (o essere un'immagine caricata)." };
+  }
+  if (heroImage && !isImageRef(heroImage)) {
+    return { ok: false, error: "L'URL dell'immagine di copertina deve iniziare con https:// (o essere un'immagine caricata)." };
+  }
+
   // Validazione colori: mai fidarsi del client. Un hex malformato produrrebbe
   // CSS variables spazzatura (tema rotto). I 3 colori obbligatori devono essere
   // #rrggbb validi; i 5 opzionali si salvano solo se validi (altrimenti si
   // scartano e resta il default della palette).
   const theme: Record<string, string> = {
-    logoUrl: str(formData.get("logoUrl")),
-    heroImage: str(formData.get("heroImage")),
+    logoUrl,
+    heroImage,
   };
   for (const key of ["primaryColor", "secondaryColor", "backgroundColor"] as const) {
     const value = str(formData.get(key));
@@ -88,6 +101,16 @@ export async function updateBnbGeneral(
     offersBreakfast: formData.get("offersBreakfast") === "on",
   };
 
+  // Link recensioni Google: aperto in un tab dell'ospite col nome della
+  // struttura → deve essere un vero host Google, non un URL qualsiasi.
+  const googleReviewsUrl = str(formData.get("google_reviews_url"));
+  if (googleReviewsUrl && !isGoogleUrl(googleReviewsUrl)) {
+    return {
+      ok: false,
+      error: "Il link recensioni deve essere un indirizzo Google (es. https://g.page/… o https://www.google.com/…).",
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("bnb_clients")
@@ -98,7 +121,7 @@ export async function updateBnbGeneral(
       address: str(formData.get("address")),
       host_phone: str(formData.get("host_phone")),
       host_whatsapp: str(formData.get("host_whatsapp")),
-      google_reviews_url: str(formData.get("google_reviews_url")),
+      google_reviews_url: googleReviewsUrl,
     })
     .eq("id", bnbId);
 
@@ -243,14 +266,25 @@ export async function upsertPlace(
   if (descIt) description.it = descIt;
   if (descEs) description.es = descEs;
 
+  // Stessa disciplina URL della pagina generale: la foto è https/relativa, il
+  // link Maps è un vero host Google (entrambi finiscono nella pagina ospite).
+  const imageUrl = str(formData.get("image_url"));
+  const googleMapsUrl = str(formData.get("google_maps_url"));
+  if (imageUrl && !isImageRef(imageUrl)) {
+    return { ok: false, error: "L'URL dell'immagine deve iniziare con https:// (o essere un'immagine caricata)." };
+  }
+  if (googleMapsUrl && !isGoogleUrl(googleMapsUrl)) {
+    return { ok: false, error: "Il link della mappa deve essere un indirizzo Google Maps (es. https://maps.app.goo.gl/… o https://www.google.com/maps/…)." };
+  }
+
   const row: Record<string, unknown> = {
     bnb_client_id: bnbId,
     category,
     name,
     description,
     walking_distance: str(formData.get("walking_distance")),
-    image_url: str(formData.get("image_url")),
-    google_maps_url: str(formData.get("google_maps_url")),
+    image_url: imageUrl,
+    google_maps_url: googleMapsUrl,
   };
   // sort_order lo si tocca SOLO quando il form lo invia: il nuovo posto lo
   // manda (va in fondo alla lista), i posti esistenti no — il loro ordine lo
@@ -411,9 +445,11 @@ export async function deletePlace(
 
 // ---------------------------------------------------------------------------
 // Riordino dei posti: il client manda l'ordine COMPLETO desiderato (lista di
-// id) e qui si riscrive sort_order = posizione. Il client è la sorgente di
-// verità → niente race tra spostamenti rapidi (l'ultimo ordine ricevuto vince)
-// e nessun problema con ordini duplicati o buchi preesistenti.
+// id) e la funzione SQL `reorder_places` riscrive sort_order = posizione in
+// UNA transazione atomica, dopo aver validato che la lista sia esattamente una
+// permutazione dei posti della struttura (vedi supabase/reorder-places.sql).
+// Così: nessuna scrittura parziale se la richiesta è manipolata/parziale, e
+// nessuna race tra spostamenti rapidi (l'ultimo ordine ricevuto vince).
 // ---------------------------------------------------------------------------
 export async function reorderPlaces(
   bnbId: string,
@@ -424,45 +460,21 @@ export async function reorderPlaces(
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     return { ok: true, message: "Ordine invariato." };
   }
-
-  const supabase = await createSupabaseServerClient();
-  // Solo gli id che appartengono davvero a questa struttura (niente fiducia
-  // nel client; la RLS è comunque l'ultima rete).
-  const { data, error } = await supabase
-    .from("restaurants")
-    .select("id, sort_order")
-    .eq("bnb_client_id", bnbId);
-
-  if (error) {
-    console.error("[admin] reorderPlaces select:", error.message);
+  // Difesa: solo stringhe non vuote, nessun duplicato (la funzione SQL rifiuta
+  // comunque i duplicati, ma così evitiamo perfino la round-trip inutile).
+  const ids = orderedIds.filter((id) => typeof id === "string" && id !== "");
+  if (ids.length !== orderedIds.length || new Set(ids).size !== ids.length) {
     return { ok: false, error: "Riordino non riuscito." };
   }
 
-  const current = new Map(
-    ((data ?? []) as { id: string; sort_order: number }[]).map((r) => [r.id, r.sort_order]),
-  );
-  // Riscrive sort_order = posizione, ma solo per gli id validi e SOLO quando il
-  // valore cambia davvero (evita update inutili → più veloce).
-  const updates = orderedIds
-    .filter((id) => current.has(id))
-    .map((id, position) => ({ id, position }))
-    .filter(({ id, position }) => current.get(id) !== position);
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("reorder_places", {
+    p_bnb_id: bnbId,
+    p_ordered_ids: ids,
+  });
 
-  if (updates.length === 0) return { ok: true, message: "Ordine invariato." };
-
-  const results = await Promise.all(
-    updates.map((u) =>
-      supabase
-        .from("restaurants")
-        .update({ sort_order: u.position })
-        .eq("id", u.id)
-        .eq("bnb_client_id", bnbId),
-    ),
-  );
-
-  const failed = results.find((r) => r.error);
-  if (failed?.error) {
-    console.error("[admin] reorderPlaces update:", failed.error.message);
+  if (error) {
+    console.error("[admin] reorderPlaces:", error.message);
     return { ok: false, error: "Riordino non riuscito." };
   }
 
