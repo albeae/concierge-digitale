@@ -1,11 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Geist_Mono, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { BRAND } from "@/lib/brand";
 
-const geistSans = Geist({
+// Coppia tipografica del restyling "Roma centro": Nunito Sans (umanista, molto
+// leggibile su mobile) per il testo, Fraunces (serif caldo) SOLO per i titoli
+// via token --font-heading. Entrambi variable font: un file per famiglia.
+const nunitoSans = Nunito_Sans({
   variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
 });
 
@@ -52,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="it"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${nunitoSans.variable} ${fraunces.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
         {children}
