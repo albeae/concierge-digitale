@@ -117,6 +117,20 @@ export function GeneralForm({ bnb }: { bnb: Bnb }) {
             </FieldRow>
           </div>
 
+          <FieldRow
+            label="Link recensioni Google"
+            htmlFor="google_reviews_url"
+            hint="Il link 'scrivi una recensione' della struttura. Se vuoto, chi dà 4-5 stelle vede solo un grazie."
+          >
+            <Input
+              id="google_reviews_url"
+              name="google_reviews_url"
+              defaultValue={bnb.googleReviewsUrl}
+              inputMode="url"
+              placeholder="https://search.google.com/local/writereview?placeid=…"
+            />
+          </FieldRow>
+
           <StatusMessage state={state} />
 
           <Button

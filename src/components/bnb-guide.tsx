@@ -74,6 +74,7 @@ export function BnbGuide({ bnb, places }: BnbGuideProps) {
             onSeeAll={() => setTab("explore")}
             hostPhone={bnb.hostPhone}
             hostWhatsapp={bnb.hostWhatsapp}
+            googleReviewsUrl={bnb.googleReviewsUrl}
           />
         )}
         {tab === "explore" && (

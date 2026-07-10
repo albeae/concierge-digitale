@@ -22,6 +22,8 @@ interface HomeTabProps {
   /** Contatti host, dal database (bnb_clients.host_phone / host_whatsapp). */
   hostPhone: string;
   hostWhatsapp: string;
+  /** Link recensioni Google della struttura (per il modulo recensione). */
+  googleReviewsUrl: string;
 }
 
 export function HomeTab({
@@ -34,6 +36,7 @@ export function HomeTab({
   onSeeAll,
   hostPhone,
   hostWhatsapp,
+  googleReviewsUrl,
 }: HomeTabProps) {
   return (
     <div className="space-y-8 pb-6">
@@ -72,7 +75,11 @@ export function HomeTab({
       />
 
       {/* 6. Modulo recensione. */}
-      <ReviewModule bnbId={bnbId} t={t.review} />
+      <ReviewModule
+        bnbId={bnbId}
+        googleReviewsUrl={googleReviewsUrl}
+        t={t.review}
+      />
 
       {/* 7. Anteprima "Dove mangiare" (feed completo nella tab Esplora). */}
       {previewPlaces.length > 0 && (

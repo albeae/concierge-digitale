@@ -29,6 +29,7 @@ export interface BnbRow {
   address: string;
   host_phone: string;
   host_whatsapp: string;
+  google_reviews_url: string;
 }
 
 /** Riga di `restaurants` così come esce da Supabase. */
@@ -54,7 +55,7 @@ export interface FeedbackRow {
 }
 
 export const BNB_COLUMNS =
-  "id, name, theme, toggles, content, location, address, host_phone, host_whatsapp";
+  "id, name, theme, toggles, content, location, address, host_phone, host_whatsapp, google_reviews_url";
 
 export const PLACE_COLUMNS =
   "id, bnb_client_id, category, name, description, walking_distance, image_url, google_maps_url, sort_order";
@@ -72,6 +73,7 @@ export function mapBnb(row: BnbRow): Bnb {
     address: row.address,
     hostPhone: row.host_phone,
     hostWhatsapp: row.host_whatsapp,
+    googleReviewsUrl: row.google_reviews_url,
   };
 }
 

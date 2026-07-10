@@ -12,14 +12,12 @@ import type { UiStrings } from "@/lib/i18n";
 interface ReviewModuleProps {
   /** Slug della struttura: il feedback finisce su guest_feedback con questa FK. */
   bnbId: string;
+  /** Link recensioni Google della struttura (vuoto = nessun redirect). */
+  googleReviewsUrl: string;
   t: UiStrings["review"];
 }
 
-// Placeholder: da sostituire con il link Google Reviews reale della struttura.
-const GOOGLE_REVIEWS_URL =
-  "https://search.google.com/local/writereview?placeid=PLACEHOLDER";
-
-export function ReviewModule({ bnbId, t }: ReviewModuleProps) {
+export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [showForm, setShowForm] = useState(false);
@@ -29,9 +27,16 @@ export function ReviewModule({ bnbId, t }: ReviewModuleProps) {
   const handleSelect = (value: number) => {
     setRating(value);
     if (value >= 4) {
-      // Voto alto → manda alle recensioni pubbliche.
+      // Voto alto → manda alle recensioni pubbliche (se il titolare ha messo
+      // il link); altrimenti ringrazia soltanto, senza aprire nulla.
       setShowForm(false);
-      window.open(GOOGLE_REVIEWS_URL, "_blank", "noopener,noreferrer");
+      if (googleReviewsUrl) {
+        window.open(googleReviewsUrl, "_blank", "noopener,noreferrer");
+      } else {
+        toast.success(t.thanks);
+        setRating(0);
+        setHover(0);
+      }
     } else {
       // Voto basso → feedback privato interno, non pubblico.
       setShowForm(true);

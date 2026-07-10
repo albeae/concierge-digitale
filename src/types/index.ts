@@ -97,6 +97,12 @@ export interface Bnb {
    * internazionale, senza `+` (colonna `host_whatsapp`).
    */
   hostWhatsapp: string;
+  /**
+   * Link "lascia una recensione su Google" della struttura (colonna
+   * `google_reviews_url`). Se vuoto, il modulo recensioni ringrazia soltanto
+   * senza aprire nulla.
+   */
+  googleReviewsUrl: string;
 }
 
 /**

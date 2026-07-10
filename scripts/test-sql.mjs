@@ -120,7 +120,7 @@ await db.query("update public.bnb_clients set owner_id = $1 where id = 'casa-ros
 // ---------------------------------------------------------------------------
 // 3. Script nuovi: DUE esecuzioni ciascuno (devono essere idempotenti).
 // ---------------------------------------------------------------------------
-for (const file of ["guest-feedback.sql", "storage-images.sql"]) {
+for (const file of ["guest-feedback.sql", "storage-images.sql", "google-reviews.sql"]) {
   console.log(`Eseguo ${file} (due volte, per l'idempotenza)…`);
   const text = await sql(file);
   await db.exec(text);
@@ -245,6 +245,14 @@ const ownerObjDelete = await asRole("authenticated", OWNER, () =>
   db.query("delete from storage.objects where name = 'casa-rossa/logo.webp'"),
 );
 ok(ownerObjDelete.affectedRows === 1, "il titolare elimina le immagini della sua struttura");
+
+console.log("\nAssertion su google_reviews_url:");
+const grCol = await db.query(
+  "select column_default, is_nullable from information_schema.columns where table_schema='public' and table_name='bnb_clients' and column_name='google_reviews_url'",
+);
+ok(grCol.rows.length === 1 && grCol.rows[0].is_nullable === "NO", "colonna google_reviews_url presente e NOT NULL");
+const grSeed = await db.query("select google_reviews_url from public.bnb_clients where id = 'casa-rossa'");
+ok(grSeed.rows[0].google_reviews_url === "", "Casa Rossa parte con link recensioni vuoto (default)");
 
 // ---------------------------------------------------------------------------
 console.log("");

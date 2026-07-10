@@ -27,6 +27,9 @@ export type ActionState =
 
 const PLACE_CATEGORIES: PlaceCategory[] = ["ristorante", "bar", "servizio"];
 
+/** Un colore del tema valido: esattamente `#rrggbb`. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
 function str(v: FormDataEntryValue | null | undefined): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -50,15 +53,24 @@ export async function updateBnbGeneral(
   const name = str(formData.get("name"));
   if (!name) return { ok: false, error: "Il nome non può essere vuoto." };
 
+  // Validazione colori: mai fidarsi del client. Un hex malformato produrrebbe
+  // CSS variables spazzatura (tema rotto). I 3 colori obbligatori devono essere
+  // #rrggbb validi; i 5 opzionali si salvano solo se validi (altrimenti si
+  // scartano e resta il default della palette).
   const theme: Record<string, string> = {
-    primaryColor: str(formData.get("primaryColor")),
-    secondaryColor: str(formData.get("secondaryColor")),
-    backgroundColor: str(formData.get("backgroundColor")),
     logoUrl: str(formData.get("logoUrl")),
     heroImage: str(formData.get("heroImage")),
   };
-  // Colori aggiunti in Fase 3: salvati solo se valorizzati, così restano
-  // opzionali (assenti = default della palette).
+  for (const key of ["primaryColor", "secondaryColor", "backgroundColor"] as const) {
+    const value = str(formData.get(key));
+    if (!HEX_COLOR.test(value)) {
+      return {
+        ok: false,
+        error: "Un colore del tema non è valido: usa un codice come #a1b2c3.",
+      };
+    }
+    theme[key] = value;
+  }
   for (const key of [
     "primaryForeground",
     "textColor",
@@ -67,7 +79,7 @@ export async function updateBnbGeneral(
     "sectionColor",
   ] as const) {
     const value = str(formData.get(key));
-    if (value) theme[key] = value;
+    if (value && HEX_COLOR.test(value)) theme[key] = value;
   }
 
   const toggles = {
@@ -86,6 +98,7 @@ export async function updateBnbGeneral(
       address: str(formData.get("address")),
       host_phone: str(formData.get("host_phone")),
       host_whatsapp: str(formData.get("host_whatsapp")),
+      google_reviews_url: str(formData.get("google_reviews_url")),
     })
     .eq("id", bnbId);
 
