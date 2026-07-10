@@ -5,6 +5,7 @@
  * contenuti sia i titoli delle sezioni, le tab e i pulsanti.
  */
 import type { Locale, PlaceCategory } from "@/types";
+import type { WeatherKind } from "@/lib/weather";
 
 interface TransportItemMeta {
   icon: string;
@@ -73,7 +74,8 @@ export interface UiStrings {
   };
   widgets: {
     weather: string;
-    weatherCondition: string;
+    /** Etichette delle condizioni meteo, per famiglia (vedi `weather.ts`). */
+    weatherConditions: Record<WeatherKind, string>;
     time: string;
   };
   actions: {
@@ -173,7 +175,16 @@ export const ui: Record<Locale, UiStrings> = {
     },
     widgets: {
       weather: "Meteo",
-      weatherCondition: "Soleggiato",
+      weatherConditions: {
+        clear: "Sereno",
+        partly: "Poco nuvoloso",
+        cloudy: "Nuvoloso",
+        fog: "Nebbia",
+        drizzle: "Pioggerella",
+        rain: "Pioggia",
+        snow: "Neve",
+        thunder: "Temporale",
+      },
       time: "Ora locale",
     },
     actions: {
@@ -271,7 +282,16 @@ export const ui: Record<Locale, UiStrings> = {
     },
     widgets: {
       weather: "Weather",
-      weatherCondition: "Sunny",
+      weatherConditions: {
+        clear: "Clear",
+        partly: "Partly cloudy",
+        cloudy: "Cloudy",
+        fog: "Fog",
+        drizzle: "Drizzle",
+        rain: "Rain",
+        snow: "Snow",
+        thunder: "Thunderstorm",
+      },
       time: "Local time",
     },
     actions: {
@@ -369,7 +389,16 @@ export const ui: Record<Locale, UiStrings> = {
     },
     widgets: {
       weather: "Clima",
-      weatherCondition: "Soleado",
+      weatherConditions: {
+        clear: "Despejado",
+        partly: "Parcialmente nublado",
+        cloudy: "Nublado",
+        fog: "Niebla",
+        drizzle: "Llovizna",
+        rain: "Lluvia",
+        snow: "Nieve",
+        thunder: "Tormenta",
+      },
       time: "Hora local",
     },
     actions: {
