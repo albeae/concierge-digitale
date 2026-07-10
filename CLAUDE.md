@@ -66,7 +66,9 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 
 **Lingua.** Codice, commenti, commit, testi admin: italiano. Contenuti ospite: it/en/es con `en` base obbligatoria. Termini tecnici in inglese dove naturale.
 
-**Commit.** Conventional in italiano con la fase: `feat(fase-3): …`, `fix(fase-3): …`, `docs: …`. Commit logici separati (SQL / codice / docs). Chiudi con `Co-Authored-By: Claude <modello> <noreply@anthropic.com>`. Branch per fase (`fase-N-nome`); **mai push senza che l'utente lo chieda** (`main` = produzione).
+**Commit.** Conventional in italiano con la fase: `feat(fase-3): …`, `fix(fase-3): …`, `docs: …`. Commit logici separati (SQL / codice / docs). Chiudi con `Co-Authored-By: Claude <modello> <noreply@anthropic.com>`. Branch per fase (`fase-N-nome`).
+
+**Autonomia (dal 2026-07-10).** Il proprietario si fida e non revisiona il codice riga per riga: implementare, verificare con la quality bar (sezione 5) e mergiare le PR quando la CI è verde SENZA chiedere conferma ogni volta è il default. Restano da confermare sempre in modo esplicito: operazioni distruttive/irreversibili (force-push, `reset --hard`, cancellazione di branch/dati non propri), e ogni migrazione SQL da applicare a mano su Supabase (nessuna chiave di servizio nel codice: quel passo resta suo). A fine lavoro va sempre riportato cosa è stato fatto — l'autonomia è sulla decisione di procedere, non sulla trasparenza a posteriori.
 
 **Colori e token.** Nessun colore/ombra/raggio scritto a mano nei componenti: solo utility Tailwind mappate su CSS variables (`bg-terracotta`, `text-primary-foreground`, `shadow-soft`, `rounded-2xl`…). Il tema per-struttura è iniettato da `ThemeProvider` in tre famiglie: identità (`--primary`/`--terracotta`/`--terracotta-strong`/`--ring`, `--ochre`), sfondi (`--background`, `--card`/`--popover`, `--secondary`/`--accent`), testo (`--foreground`/`--card-foreground`/`--popover-foreground`, `--muted-foreground`, `--primary-foreground`). I 5 colori opzionali (`primaryForeground`, `textColor`, `mutedColor`, `cardColor`, `sectionColor`) se assenti non sovrascrivono nulla. Whitelist hex: `brand.ts`, `recycling.ts`, `DEFAULTS` in `theme-colors.tsx` (default calcolati per conversione da oklch, non a occhio).
 
@@ -128,7 +130,7 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 **`main` è protetto (dal 2026-07-10):** branch ruleset GitHub con "Require a pull request before merging" + "Require status checks to pass" (check `verifica`), nessun bypass. Push diretto su `main` è **rifiutato da GitHub**, indipendentemente da chi lo tenta. Ogni modifica: branch → commit → push del branch → apri PR → aspetta CI verde → merge.
 
-1. **Branch per fase**, nomi `fase-N-descrizione`. Lavoro corrente committato lì; l'utente rivede e mergia lui.
+1. **Branch per fase**, nomi `fase-N-descrizione`. Lavoro corrente committato lì, poi PR + merge autonomo a CI verde (vedi sezione 3, "Autonomia").
 2. **Ordine dei commit**: prima l'SQL (se c'è), poi il codice, poi i docs — ognuno autonomo e con build verde.
 3. **Verifica end-to-end quando possibile**: preview → login (se serve, chiedi le credenziali) → azione reale → misura → eventuale ripristino. Quando il preview non può partire, dichiara cosa NON hai potuto verificare.
 4. **Passi manuali**: qualsiasi cosa l'utente debba fare a mano (SQL Editor, pannello Supabase, merge) va elencata a fine risposta, numerata, con i comandi/SQL pronti da incollare.
