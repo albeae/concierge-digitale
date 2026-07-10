@@ -22,6 +22,8 @@ export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) 
   const [hover, setHover] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState("");
+  // Honeypot anti-bot: campo invisibile, un ospite reale non può compilarlo.
+  const [website, setWebsite] = useState("");
   const [pending, startTransition] = useTransition();
 
   const handleSelect = (value: number) => {
@@ -52,6 +54,7 @@ export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) 
         bnbId,
         rating,
         message: feedback,
+        website,
       });
       if (!result.ok) {
         toast.error(t.error);
@@ -59,6 +62,7 @@ export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) 
       }
       setShowForm(false);
       setFeedback("");
+      setWebsite("");
       setRating(0);
       setHover(0);
       toast.success(t.thanks);
@@ -99,6 +103,19 @@ export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) 
 
         {showForm && (
           <div className="mt-4 space-y-3">
+            {/* Honeypot: fuori schermo e fuori dal tab order, un ospite reale
+                non lo vede né lo raggiunge; un bot che compila ogni input lo
+                riempie e si smaschera da solo. */}
+            <input
+              type="text"
+              name="website"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              className="sr-only"
+            />
             <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
