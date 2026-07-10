@@ -7,12 +7,15 @@ import { Download, Printer } from "lucide-react";
 import QRCode from "qrcode";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 /**
  * Genera il data URL PNG del QR che punta alla guida della struttura.
- * L'URL usa l'origin corrente: in produzione è il dominio vero del sito
- * (l'admin gira sullo stesso deploy della pagina ospite), in locale localhost.
+ * L'URL usa SEMPRE il dominio canonico di produzione (`SITE_URL`), MAI
+ * `window.location.origin`: un QR generato da una preview Vercel o da
+ * localhost codificherebbe un indirizzo temporaneo, e questo QR finisce
+ * stampato su carta in camera (errore evitato 2026-07-10, review Codex).
  * Colori: default della libreria (nero su bianco), MAI il tema — un QR a
  * basso contrasto può non scansionarsi.
  */
@@ -21,11 +24,9 @@ export function useQrDataUrl(path: string, width: number) {
     null,
   );
 
-  // window.location esiste solo nel browser: si genera tutto dopo il mount
-  // (il primo render server/client mostra il placeholder).
   useEffect(() => {
     let active = true;
-    const url = `${window.location.origin}${path}`;
+    const url = `${SITE_URL}${path}`;
     QRCode.toDataURL(url, { width, margin: 1, errorCorrectionLevel: "M" })
       .then((dataUrl) => {
         if (active) setResult({ url, dataUrl });
