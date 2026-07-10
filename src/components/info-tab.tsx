@@ -94,23 +94,48 @@ export function InfoTab({
         pharmacy={pharmacy}
       />
 
-      {/* Check-in / Check-out */}
+      {/* Check-in / Check-out: orario + eventuali istruzioni (arrivo, self
+          check-in, chiavi). Il blocco istruzioni compare solo se compilato. */}
       <Card className="py-0">
         <CardContent className="divide-y divide-border p-0">
           {[
-            { icon: Clock, label: t.info.checkIn, value: content.checkIn },
-            { icon: LogOut, label: t.info.checkOut, value: content.checkOut },
+            {
+              icon: Clock,
+              label: t.info.checkIn,
+              value: content.checkIn,
+              detailsLabel: t.info.checkInDetails,
+              details: content.checkInInstructions,
+            },
+            {
+              icon: LogOut,
+              label: t.info.checkOut,
+              value: content.checkOut,
+              detailsLabel: t.info.checkOutDetails,
+              details: content.checkOutInstructions,
+            },
           ].map((row) => (
-            <div key={row.label} className="flex items-center gap-3 px-5 py-4">
-              <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary">
-                <row.icon className="size-5 text-terracotta" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {row.label}
-                </p>
-                <p className="text-base font-semibold">{row.value}</p>
+            <div key={row.label} className="px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary">
+                  <row.icon className="size-5 text-terracotta" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {row.label}
+                  </p>
+                  <p className="text-base font-semibold">{row.value}</p>
+                </div>
               </div>
+              {row.details && (
+                <div className="mt-3 rounded-2xl bg-secondary/50 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {row.detailsLabel}
+                  </p>
+                  <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">
+                    {row.details}
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </CardContent>

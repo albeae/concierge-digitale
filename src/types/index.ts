@@ -68,8 +68,19 @@ export interface BnbContent {
   welcomeMessage: string;
   wifiNetworkName: string;
   wifiPassword: string;
+  /** Orario di check-in, es. "Dalle 14:00 alle 20:00". */
   checkIn: string;
+  /** Orario di check-out, es. "Entro le 10:30". */
   checkOut: string;
+  /**
+   * Istruzioni di arrivo / self check-in in testo libero (multilinea): come
+   * raggiungere la struttura, codice del portone/cassetta, dove sono le chiavi.
+   * Opzionale: se vuoto la card mostra solo l'orario. Le righe a capo si
+   * conservano nella guida (`whitespace-pre-line`).
+   */
+  checkInInstructions: string;
+  /** Cosa fare alla partenza: dove lasciare le chiavi, rifiuti. Come sopra, opzionale e multilinea. */
+  checkOutInstructions: string;
   houseRules: HouseRule[];
 }
 
