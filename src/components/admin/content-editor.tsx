@@ -194,7 +194,7 @@ export function ContentEditor({ bnb }: { bnb: Bnb }) {
             <FieldRow
               label="Come entrare"
               htmlFor="checkInInstructions"
-              hint="Istruzioni di arrivo, self check-in, dove sono le chiavi. Lascia vuoto per non mostrarlo."
+              hint="Arrivo e self check-in: piano, citofono, dove ritirare le chiavi. ⚠️ Niente codici (portone, cassetta, allarme): questa pagina è pubblica — i codici vanno inviati all'ospite via WhatsApp. Lascia vuoto per non mostrarlo."
             >
               <Textarea
                 id="checkInInstructions"

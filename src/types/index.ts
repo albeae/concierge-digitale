@@ -74,9 +74,12 @@ export interface BnbContent {
   checkOut: string;
   /**
    * Istruzioni di arrivo / self check-in in testo libero (multilinea): come
-   * raggiungere la struttura, codice del portone/cassetta, dove sono le chiavi.
-   * Opzionale: se vuoto la card mostra solo l'orario. Le righe a capo si
-   * conservano nella guida (`whitespace-pre-line`).
+   * raggiungere l'ingresso, piano, citofono, dove ritirare le chiavi.
+   * ⚠️ MAI codici di accesso (portone, keybox, PIN allarme): la pagina ospite
+   * è pubblica con URL permanente e lettura anon via RLS — un codice salvato
+   * qui è un accesso fisico regalato. I codici si mandano via WhatsApp
+   * (vedi CLAUDE.md, errore n. 18). Opzionale: se vuoto la card mostra solo
+   * l'orario; le righe a capo si conservano (`whitespace-pre-line`).
    */
   checkInInstructions: string;
   /** Cosa fare alla partenza: dove lasciare le chiavi, rifiuti. Come sopra, opzionale e multilinea. */
