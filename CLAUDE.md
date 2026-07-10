@@ -193,13 +193,11 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 ## 9. Debiti tecnici correnti (in ordine di rischio)
 
-1. **Contrasto di fabbrica del badge ZTL/accento**: `primaryForeground` su `secondaryColor` (ocra) è ~2.3:1 — leggibile a fatica. La guardia contrasto non lo segnala più (coppia esclusa perché micro-badge decorativo), ma resta un miglioramento estetico: scurire l'ocra del seed o passare il badge a testo scuro.
-2. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
-3. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
-4. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
-5. **Meteo su Roma fissa**: le coordinate sono fisse (tutte le strutture sono a Roma); per il multi-città servirà lat/lon per-struttura nel DB.
+1. **Contrasto di fabbrica del badge ZTL/accento**: `primaryForeground` su `secondaryColor` (ocra) è ~2.3:1 — leggibile a fatica. La guardia contrasto non lo segnala più (coppia esclusa perché micro-badge decorativo). Valutato col proprietario (2026-07-10): non necessario, resta com'è per scelta.
+2. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
+3. **Meteo su Roma fissa**: le coordinate sono fisse (tutte le strutture sono a Roma); per il multi-città servirà lat/lon per-struttura nel DB.
 
-**Risolti** (2026-07-10): `next-themes` rimossa da `package.json` (dipendenza morta, sonner era già stato riscritto senza); `README.md` sostituito con la descrizione reale del progetto.
+**Risolti** (2026-07-10): `next-themes` rimossa da `package.json` (dipendenza morta, sonner era già stato riscritto senza); `README.md` sostituito con la descrizione reale del progetto; blocco `.dark` morto in `globals.css` rimosso (nessun toggle lo attivava mai — confermato nessun riferimento a `classList`/`.dark` in `theme-provider.tsx`; mantenuto `@custom-variant dark` così le classi `dark:` già usate nei componenti shadcn restano innocue invece di attivarsi in automatico col tema scuro del sistema); seed con valori finti di telefono/WhatsApp — verificato con query diretta su Supabase: Casa Rossa ha già i dati reali (`+393280599447` / `393280599447`, non più il placeholder), il debito era sui dati e non sul codice, ed è stato risolto dal proprietario aggiornandoli dall'admin.
 
 **Risolti** (2026-07-08): `image_url` dei posti non usa più `next/image` (che senza `remotePatterns` crashava la pagina) ma un `<img>` con fallback all'emoji su `onError` — nessun URL può più rompere la guest; `maximumScale: 1` rimosso dal viewport (pinch-zoom libero).
 
