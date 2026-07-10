@@ -162,11 +162,11 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 - **Riordino posti atomico**: funzione SQL `reorder_places` (valida la permutazione, unica UPDATE, lock sulla riga padre, `security invoker`, EXECUTE revocato a PUBLIC) chiamata via `rpc`; client ottimistico (l'ordine completo vince, rollback su errore).
 - **Storage per-cartella**: bucket pubblico `bnb-images`, percorsi `<slug>/<tipo>-<timestamp>`, policy su `(storage.foldername(objects.name))[1]`. Nome file sempre nuovo: mai combattere la cache CDN con l'upsert.
 - **Immagini posti con `<img>` + fallback emoji su `onError`** (non `next/image`): nessun URL esterno può rompere la guest.
+- **Istruzioni check-in/check-out** (`checkInInstructions`/`checkOutInstructions`, testo libero multilinea per arrivo/self check-in/chiavi, sotto l'orario nella tab Info, mostrate solo se compilate con `whitespace-pre-line`): sono nuovi campi dentro il jsonb `content` → nessuna migrazione SQL, con fallback per-chiave su `en` automatico. È il vantaggio concreto della tabella unica con jsonb.
 - **URL validati server-side** (`url-validation.ts`): host Google veri (no substring) per recensioni/Maps; https o path relativo per le immagini. Colori tema validati `#rrggbb` in `updateBnbGeneral`.
 - **QR generato nel browser** con `window.location.origin`, colori fissi nero/bianco (un QR a basso contrasto non si scansiona). Attenzione: stampato da una preview Vercel codificherebbe l'URL sbagliato.
 - **Meteo client-side** (Open-Meteo, gratis, no key): le pagine restano statiche; coordinate fisse su Roma; su errore placeholder discreto.
-- **Manifest/chrome PWA**: colori statici da `brand.ts` (il manifest è unico per l'app, non per-tenant); SW network-first, esclude `/admin` dalla cache.
-- **Stack**: Next.js 16 (App Router, Turbopack), Tailwind v4, shadcn/ui (base-nova, lucide), sonner, `qrcode`.
+- **Manifest/chrome PWA**: colori statici da `brand.ts` (manifest unico per l'app, non per-tenant); SW network-first, esclude `/admin` dalla cache. **Stack**: Next.js 16 (App Router, Turbopack), Tailwind v4, shadcn/ui (base-nova, lucide), sonner, `qrcode`.
 
 ---
 
@@ -186,7 +186,7 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 | # | Idea | Valore | Complessità | Priorità |
 |---|---|---|---|---|
-| 1 | Check-in/check-out nella guida (arrivo, self check-in, chiavi) | domanda n.1 di ogni ospite | bassa | alta |
+| 1 | ✅ Check-in/check-out nella guida (arrivo, self check-in, chiavi) — fatto, vedi sezione 8 | domanda n.1 di ogni ospite | bassa | alta |
 | 2 | Badge feedback non letti nell'admin | il negativo conta solo se visto in tempo | bassa | alta |
 | 3 | Invio guida via WhatsApp pre-arrivo (`whatsappUrl` già esiste) | ospite informato prima, marketing passivo | bassa | media |
 | 4 | Contatore visite privacy-friendly (evento anonimo, no PII) | prova d'uso del QR, argomento Fase 8 | media | media |
