@@ -170,17 +170,27 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 ---
 
-## 9. Debiti tecnici e backlog
+## 9. Valutazione architetturale e piano d'azione
 
-**Debiti correnti (in ordine di rischio):**
-1. Contrasto del badge ZTL/accento (~2.3:1): valutato col proprietario (2026-07-10), resta così per scelta.
-2. `walkingDistance` non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
-3. Meteo su Roma fissa: per il multi-città servirà lat/lon per-struttura nel DB.
+**⚠️ Da migliorare:** (1) QR/stampa fuori produzione — `window.location.origin` codifica l'URL sbagliato da una preview Vercel; fix: URL canonico esplicito o stampa disabilitata fuori produzione. (2) Immagini Storage senza `next/image` — l'`<img>` con fallback va bene per URL esterni ma penalizza le performance sul bucket noto; fix: `remotePattern` mirato al progetto Supabase. (3) Nessun test e2e sui flussi browser — `test:sql`/`test:unit` non coprono login→salvataggio→rilettura; fix: 4-5 test Playwright in CI (Fase 6).
 
-**Backlog (non anticipare senza richiesta, salvo tecnicismi che il proprietario non può valutare):**
-1. `next/image` con `remotePattern` mirato al progetto Supabase per le immagini di Storage (il `<img>` con fallback resta per gli URL esterni).
-2. Pulizia immagini orfane nel bucket (ogni upload crea un file nuovo; serve elenco per cartella + cestino nell'admin).
-3. QR/stampa: URL pubblico esplicito o stampa disabilitata fuori produzione.
+**❌ Da ripensare:** `/` che reindirizza al primo B&B — con più clienti regala il posizionamento a una struttura sola. Alternativa già pianificata: landing con valore del prodotto, demo, CTA (Fase 4), niente elenco pubblico delle strutture.
+
+**✅ Confermato solido**: architettura a due binari (ISR guest / dinamico admin), difesa a tre livelli, tabella unica con jsonb, mapper centralizzati, quality bar + CI/branch protection, test SQL su PGlite, rate limit + honeypot + WAF sul feedback — vedi sezione 8 per il perché di ciascuna.
+
+**Debiti accettati per scelta** (non richiedono azione): contrasto badge ZTL/accento (~2.3:1, valutato col proprietario 2026-07-10); `walkingDistance` non localizzato; meteo su Roma fissa (multi-città richiederà lat/lon per-struttura).
+
+**Piano d'azione, in ordine di priorità:** (1) landing su `/`, chiude la Fase 4; (2) badge feedback non letti nell'admin (colonna `read_at` + UI); (3) QR sicuro fuori produzione, prima di stampare per la Fase 7; (4) test offline reale su iPhone/Android (Fase 5); (5) `next/image` con `remotePattern` Supabase; (6) Fase 6 — loading states, test e2e Playwright, analytics senza PII; (7) Fase 7 — pilota reale con QR in camera; (8) pulizia immagini orfane nel bucket; (9) Fase 8 (SaaS) solo dopo che il pilota valida il prodotto — non anticipare.
+
+**Idee proposte** (backlog prodotto, non anticipare senza richiesta esplicita salvo tecnicismi che il proprietario non può valutare):
+
+| # | Idea | Valore | Complessità | Priorità |
+|---|---|---|---|---|
+| 1 | Check-in/check-out nella guida (arrivo, self check-in, chiavi) | domanda n.1 di ogni ospite | bassa | alta |
+| 2 | Badge feedback non letti nell'admin | il negativo conta solo se visto in tempo | bassa | alta |
+| 3 | Invio guida via WhatsApp pre-arrivo (`whatsappUrl` già esiste) | ospite informato prima, marketing passivo | bassa | media |
+| 4 | Contatore visite privacy-friendly (evento anonimo, no PII) | prova d'uso del QR, argomento Fase 8 | media | media |
+| 5 | Email al titolare per feedback ≤2 stelle (Edge Function) | chiude il ciclo mentre l'ospite è in struttura | medio/alta | bassa |
 
 ---
 
