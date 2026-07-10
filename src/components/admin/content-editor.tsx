@@ -23,6 +23,8 @@ function emptyContent(): BnbContent {
     wifiPassword: "",
     checkIn: "",
     checkOut: "",
+    checkInInstructions: "",
+    checkOutInstructions: "",
     houseRules: [],
   };
 }
@@ -172,18 +174,45 @@ export function ContentEditor({ bnb }: { bnb: Bnb }) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <FieldRow label="Check-in" htmlFor="checkIn">
+            <FieldRow label="Check-in" htmlFor="checkIn" hint="Solo l'orario, es. “Dalle 14:00 alle 20:00”.">
               <Input
                 id="checkIn"
                 value={c.checkIn}
                 onChange={(e) => setC("checkIn", e.target.value)}
               />
             </FieldRow>
-            <FieldRow label="Check-out" htmlFor="checkOut">
+            <FieldRow label="Check-out" htmlFor="checkOut" hint="Solo l'orario, es. “Entro le 10:30”.">
               <Input
                 id="checkOut"
                 value={c.checkOut}
                 onChange={(e) => setC("checkOut", e.target.value)}
+              />
+            </FieldRow>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FieldRow
+              label="Come entrare"
+              htmlFor="checkInInstructions"
+              hint="Istruzioni di arrivo, self check-in, dove sono le chiavi. Lascia vuoto per non mostrarlo."
+            >
+              <Textarea
+                id="checkInInstructions"
+                value={c.checkInInstructions ?? ""}
+                onChange={(e) => setC("checkInInstructions", e.target.value)}
+                className="min-h-24"
+              />
+            </FieldRow>
+            <FieldRow
+              label="Prima di partire"
+              htmlFor="checkOutInstructions"
+              hint="Cosa fare alla partenza: chiavi, rifiuti. Lascia vuoto per non mostrarlo."
+            >
+              <Textarea
+                id="checkOutInstructions"
+                value={c.checkOutInstructions ?? ""}
+                onChange={(e) => setC("checkOutInstructions", e.target.value)}
+                className="min-h-24"
               />
             </FieldRow>
           </div>

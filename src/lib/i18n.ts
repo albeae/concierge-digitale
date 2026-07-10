@@ -71,6 +71,10 @@ export interface UiStrings {
     checkInOutTitle: string;
     checkIn: string;
     checkOut: string;
+    /** Titolo del blocco istruzioni di arrivo/self check-in. */
+    checkInDetails: string;
+    /** Titolo del blocco istruzioni di partenza. */
+    checkOutDetails: string;
   };
   widgets: {
     weather: string;
@@ -172,6 +176,8 @@ export const ui: Record<Locale, UiStrings> = {
       checkInOutTitle: "Check-in & Check-out",
       checkIn: "Check-in",
       checkOut: "Check-out",
+      checkInDetails: "Come entrare",
+      checkOutDetails: "Prima di partire",
     },
     widgets: {
       weather: "Meteo",
@@ -279,6 +285,8 @@ export const ui: Record<Locale, UiStrings> = {
       checkInOutTitle: "Check-in & Check-out",
       checkIn: "Check-in",
       checkOut: "Check-out",
+      checkInDetails: "How to get in",
+      checkOutDetails: "Before you leave",
     },
     widgets: {
       weather: "Weather",
@@ -386,6 +394,8 @@ export const ui: Record<Locale, UiStrings> = {
       checkInOutTitle: "Entrada y salida",
       checkIn: "Entrada",
       checkOut: "Salida",
+      checkInDetails: "Cómo entrar",
+      checkOutDetails: "Antes de salir",
     },
     widgets: {
       weather: "Clima",

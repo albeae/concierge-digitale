@@ -162,6 +162,8 @@ function normalizeContent(v: unknown): BnbContent {
     wifiPassword: s("wifiPassword"),
     checkIn: s("checkIn"),
     checkOut: s("checkOut"),
+    checkInInstructions: s("checkInInstructions"),
+    checkOutInstructions: s("checkOutInstructions"),
     houseRules,
   };
 }
@@ -173,6 +175,8 @@ function contentIsEmpty(c: BnbContent): boolean {
     !c.wifiPassword &&
     !c.checkIn &&
     !c.checkOut &&
+    !c.checkInInstructions &&
+    !c.checkOutInstructions &&
     c.houseRules.length === 0
   );
 }
