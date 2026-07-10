@@ -24,6 +24,7 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 | `src/lib/data.ts` | Data layer pubblico: `getBnb` / `getBnbIds` / `getPlaces` (async, `cache()`) |
 | `src/lib/auth.ts` | DAL admin: `getSessionUser`, `requireUser`, `getOwnedBnb(s)`, `getOwnedBnbPlaces`, `getOwnedBnbFeedback` |
 | `src/lib/contrast.ts` | Rapporto di contrasto WCAG (guardia del theme editor) |
+| `src/lib/weather.ts` | Meteo attuale di Roma da Open-Meteo (fetch client-side, codici WMO → condizione) |
 | `src/lib/bnb-mappers.ts` | UNICO punto di mappatura righe DB (snake_case) ↔ tipi dominio (camelCase) + elenchi colonne |
 | `src/lib/localize.ts` | Fallback lingua per-chiave su `en` — **non modificare la logica** |
 | `src/lib/i18n.ts` | Etichette UI fisse in it/en/es (`UiStrings`) |
@@ -37,6 +38,7 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 | `supabase/phase-3-auth.sql` | Fase 3: policy di scrittura titolare (applicato ✅) |
 | `supabase/guest-feedback.sql` | Feedback ospiti: tabella + policy (insert anon, lettura/delete titolare) — applicato ✅ |
 | `supabase/storage-images.sql` | Bucket `bnb-images` + policy per-cartella `<slug>` — applicato ✅ |
+| `supabase/google-reviews.sql` | Colonna `google_reviews_url` su bnb_clients — **da applicare prima del deploy** |
 | `scripts/test-sql.mjs` | Test PGlite degli script SQL con stub auth/storage (`npm run test:sql`) |
 | `.github/workflows/ci.yml` | CI a ogni push: tsc, lint, test SQL, grep colori, build |
 | `public/sw.js`, `src/app/manifest.ts` | PWA: service worker (solo produzione) + manifest |
@@ -148,6 +150,8 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 **SQL applicati** (2026-07-10): `supabase/guest-feedback.sql` e `supabase/storage-images.sql` sono stati eseguiti in produzione → feedback e upload immagini pienamente attivi.
 
+**⚠️ SQL da applicare PRIMA del prossimo deploy**: `supabase/google-reviews.sql` aggiunge la colonna `google_reviews_url`, che il nuovo codice legge in `BNB_COLUMNS`. Se il codice va live prima della colonna, la SELECT fallisce e le pagine ospite rispondono 404. Ordine: prima l'SQL, poi il push.
+
 **Dominio**: `albeaconcierge.it` collegato a Vercel (2026-07-10). `www` via CNAME `cname.vercel-dns.com`; l'apex via record A verso l'IP di Vercel (attenzione al nome del record su Register.it: dev'essere `albeaconcierge.it`, non `@.albeaconcierge.it`).
 
 ---
@@ -171,6 +175,9 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 - **QR generato nel browser** con `window.location.origin`: l'admin gira sullo stesso deploy della guest, quindi in produzione l'URL è quello vero senza config. Colori fissi nero/bianco (non a tema): un QR a basso contrasto non si scansiona.
 - **Guardia contrasto per tipo di testo** (`theme-preview.tsx`): ogni coppia testo/sfondo ha la sua soglia — 4.5 per il testo di lettura (paragrafi su sfondi), 3 per il testo grande su colore (header, pulsanti). Due livelli d'avviso: rosso sotto 3, soft tra 3 e la soglia. Così il tema di fabbrica (bianco su terracotta ≈ 4.3) NON viene segnalato (si legge benissimo, ed è testo grande). La coppia del micro-badge accento è esclusa (decorativa, dava un rosso fisso).
 - **Pulsante "Colori base"** nel theme selector: reimposta gli 8 colori alla palette base dell'app (`BASE_COLORS` in `theme-colors.tsx`, gli stessi dell'interfaccia admin/`:root`). Solo stato locale → l'utente vede l'anteprima e poi salva; serve a chiunque abbia pasticciato i colori durante le prove.
+- **Meteo reale client-side** (`weather.ts` + `home-widgets.tsx`): Open-Meteo (gratis, no key, CORS) chiamato dal browser dell'ospite → le pagine restano statiche. Coordinate fisse su Roma; condizioni in 8 famiglie con icona e testo localizzato; su errore un placeholder discreto (niente widget rotto).
+- **Link recensioni per-struttura** (`google_reviews_url`): il voto ≥4 apre il link Google della struttura; se vuoto, il modulo ringrazia soltanto (niente redirect a un placeholder). Colonna diretta, non jsonb, come gli altri contatti host.
+- **Colori del tema validati server-side** (`updateBnbGeneral`): i 3 obbligatori devono essere `#rrggbb` (altrimenti errore), i 5 opzionali si salvano solo se validi. Niente CSS variables spazzatura da input malformati.
 - **Stack**: Next.js 16 (App Router, Turbopack), Tailwind v4, shadcn/ui (base-nova, icone lucide), sonner per i toast (riscritto senza next-themes), `qrcode` per i QR, PWA con SW network-first (`public/sw.js`, solo produzione).
 - **Manifest/chrome PWA**: colori statici da `brand.ts` (il manifest è unico per l'app, non per-tenant).
 
@@ -178,21 +185,21 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 ## 9. Debiti tecnici correnti (in ordine di rischio)
 
-1. **Colori del tema non validati server-side**: `updateBnbGeneral` salva qualsiasi stringa; un valore malformato produce CSS variables spazzatura (tema rotto, non un exploit: React le confina nel valore della proprietà). Aggiungere validazione `#rrggbb` nell'action (ora c'è `src/lib/contrast.ts` con la regex pronta).
-2. **Link Google Reviews placeholder** (`placeid=PLACEHOLDER` in `review-module.tsx`): andrà per-struttura nel DB.
-3. **Meteo finto** nel widget Home (l'orologio invece è reale). Serve un'API.
-4. **Contrasto di fabbrica del badge ZTL/accento**: `primaryForeground` su `secondaryColor` (ocra) è ~2.3:1 — leggibile a fatica. La guardia contrasto non lo segnala più (coppia esclusa perché micro-badge decorativo), ma resta un miglioramento estetico: scurire l'ocra del seed o passare il badge a testo scuro.
-5. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
-6. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
-7. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
-8. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
-9. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
+1. **Contrasto di fabbrica del badge ZTL/accento**: `primaryForeground` su `secondaryColor` (ocra) è ~2.3:1 — leggibile a fatica. La guardia contrasto non lo segnala più (coppia esclusa perché micro-badge decorativo), ma resta un miglioramento estetico: scurire l'ocra del seed o passare il badge a testo scuro.
+2. **`next-themes` è una dipendenza morta** (sonner riscritto senza): da rimuovere da package.json.
+3. **README.md è ancora il boilerplate** di create-next-app: da sostituire con descrizione reale del progetto.
+4. **Blocco `.dark` in `globals.css` mai attivato** (nessun toggle dark): codice morto, innocuo ma fuorviante.
+5. **`walkingDistance` campo singolo** non localizzato (per scelta: valore neutro + suffisso localizzato lato UI).
+6. **Seed con valori finti**: telefono/WhatsApp di Casa Rossa sono ancora `+390000000000` finché l'utente non li aggiorna dall'admin.
+7. **Meteo su Roma fissa**: le coordinate sono fisse (tutte le strutture sono a Roma); per il multi-città servirà lat/lon per-struttura nel DB.
 
 **Risolti** (2026-07-08): `image_url` dei posti non usa più `next/image` (che senza `remotePatterns` crashava la pagina) ma un `<img>` con fallback all'emoji su `onError` — nessun URL può più rompere la guest; `maximumScale: 1` rimosso dal viewport (pinch-zoom libero).
 
 **Risolti** (2026-07-09): il feedback 1–3 stelle viene salvato in `guest_feedback` e letto dall'admin (era il debito n. 1); i selettori colore non sbordano più a destra su telefono (tripla causa: `min-width: min-content` dei fieldset con hint in nowrap, popover a larghezza fissa, zoom automatico di iOS sugli input sotto i 16px).
 
 **Risolti** (2026-07-10): riordino posti che "trascinava" altri posti (era lo scambio secco dei `sort_order` con duplicati → ora `reorderPlaces` riscrive l'ordine completo, con update ottimistico per la velocità); frecce di riordino ingrandite (28→36px, con bordo) per il tocco su mobile; nomi dei posti allineati (badge categoria a larghezza fissa); guardia contrasto senza falsi allarmi sul tema di fabbrica (soglia per tipo di testo); pulsante "Colori base" per resettare il tema.
+
+**Risolti** (2026-07-10, rifinitura pre-cliente): meteo reale di Roma via Open-Meteo (`lib/weather.ts`, era finto — debito n. 3); link recensioni Google per-struttura (colonna `google_reviews_url` + campo admin, era il placeholder — debito n. 2), vuoto = solo ringraziamento; validazione colori `#rrggbb` server-side in `updateBnbGeneral` (era il debito n. 1).
 
 ---
 
@@ -206,3 +213,110 @@ Rimaste fuori di proposito (annotate per non perderle):
 2. **Pulizia immagini orfane su Storage** — ogni upload crea un file nuovo (scelta anti-cache); i vecchi restano nel bucket. Prima o poi: elenco file per cartella e cestino nell'admin.
 
 Le prossime proposte si aggiungono qui, in ordine di valore/sforzo; non anticiparle senza richiesta esplicita, a meno che non si tratti di cose tecniche che il proprietario in quanto principiante non comprende.
+
+---
+
+## 11. Review Codex richiesta dal proprietario (2026-07-10)
+
+Questa sezione è stata aggiunta da **Codex**, dopo la richiesta esplicita del proprietario di fare una review del lavoro svolto con Claude Code. È un registro di problemi e miglioramenti emersi dalla review: non indica modifiche già implementate, salvo dove indicato diversamente.
+
+### Esito della review
+
+La base è solida e appropriata per il primo cliente: separazione netta fra guest statico e admin dinamico, difesa su proxy + DAL + RLS, mapper centralizzati, fallback i18n e test PGlite delle policy sono scelte da mantenere. Non anticipare la complessità SaaS della Fase 8.
+
+Verifiche fatte il 2026-07-10: `npx tsc --noEmit`, lint e `npm run test:sql` passati; build di produzione passata con `/` e `/[bnbId]` statiche/ISR a 5 minuti, route admin dinamiche e `Proxy (Middleware)` presente. La prima build locale non poteva scaricare Geist da Google per il blocco rete del sandbox; con rete disponibile la build è passata. Non è un difetto applicativo, ma la build dipende dal download dei font Google.
+
+### Problemi da risolvere prima del cliente pilota
+
+1. **PWA e area admin (alta priorità, privacy).** `ServiceWorkerRegister` è nel layout globale e `public/sw.js` mette in cache ogni navigazione, incluse `/admin/*`. Dopo il logout, su un dispositivo condiviso una pagina admin già visitata potrebbe riapparire offline dalla cache. Escludere `/admin` dal service worker (sia registrazione sia `fetch` handler), cambiare la versione della cache e verificare: login → visita admin → logout → offline → URL admin, che non deve mostrare contenuti privati.
+2. **Feedback ospite senza limite (alta priorità, abuso/costi).** La policy anon permette insert correttamente ma non limita il numero di invii. Prima che il QR sia pubblico aggiungere rate limiting lato server e anti-bot leggero (honeypot e/o Turnstile), mantenendo il messaggio ospite semplice.
+3. **Riordino posti non atomico (media priorità, integrità dati).** `reorderPlaces` filtra gli id ricevuti: una richiesta manipolata può essere parziale o contenere duplicati; gli update paralleli possono lasciare un ordine parzialmente aggiornato in caso di errore. Validare che gli id siano esattamente una permutazione della lista DB e svolgere il riordino in un'unica operazione transazionale/RPC SQL. Aggiungere test per lista parziale, duplicata e fallimento a metà aggiornamento.
+4. **URL pubblicati senza validazione (media priorità).** `google_reviews_url` viene salvato e aperto nel browser dell'ospite senza verifica. Accettare solo URL `https` e, per le recensioni, host Google previsti; applicare la stessa disciplina ai link Maps e agli URL immagine inseriti a mano. Un valore errato deve produrre un errore chiaro nel form, mai un salvataggio silenzioso.
+5. **CI dopo il deploy (media priorità, processo).** Il workflow gira solo su `push`; dato che `main` è produzione, Vercel può deployare prima che la CI fallisca. Aggiungere il trigger `pull_request` e proteggere `main` su GitHub imponendo la CI verde prima del merge. La protezione del branch è una configurazione GitHub, non verificabile dal repository.
+
+### Miglioramenti consigliati per le prossime fasi
+
+1. **Fase 4:** trasformare `/` in una landing essenziale (valore del prodotto, demo, call to action) invece di reindirizzare al primo B&B. Il routing per slug è già pronto; non serve un elenco pubblico automatico delle strutture.
+2. **QR di produzione:** il QR usa `window.location.origin`, scelta corretta sul deploy di produzione ma rischiosa se stampato da una preview Vercel. Preferire un URL pubblico esplicito per la stampa oppure disabilitare la stampa fuori da produzione.
+3. **Fase 5:** dopo la correzione della cache admin, eseguire il test offline su iPhone e Android: prima visita, modalità aereo, lettura contenuti, ritorno online dopo un salvataggio admin e aggiornamento della cache.
+4. **Fase 6:** aggiungere pochi test end-to-end ripetibili (guest, login, salvataggio admin, feedback e QR). I test SQL sono ottimi per schema/RLS, ma non coprono l'interfaccia e i flussi browser. Aggiungere inoltre un indicatore di feedback non letti nell'admin: oggi i commenti negativi vengono salvati ma il titolare deve ricordarsi di aprire la lista.
+5. **Osservabilità e privacy:** prima di introdurre analytics, definire le sole metriche utili al pilota (scansione QR, apertura guida, invio feedback), non raccogliere PII e documentare i servizi terzi già usati dal browser (Google Maps e Open-Meteo) nella pagina privacy da validare con chi cura gli aspetti legali.
+6. **Migrazioni:** finché gli SQL vengono applicati manualmente va bene per il pilot, ma mantenere una checklist/versione delle migrazioni realmente applicate in produzione. Ogni nuova colonna letta dal codice deve avere sempre l'ordine: SQL applicato → verifica → commit/push.
+
+### Bloccante noto al momento della review
+
+`supabase/google-reviews.sql` deve essere eseguito in Supabase **prima** di deployare il codice che aggiunge `google_reviews_url` a `BNB_COLUMNS`. Se il codice arriva prima della colonna, la query pubblica fallisce e la pagina guest restituisce 404. Questo è già annotato nella sezione 7 e resta il passo manuale obbligatorio.
+
+---
+
+## 12. Workflow Claude Code + Codex (2026-07-10)
+
+Questa sezione è stata aggiunta da **Codex** su richiesta del proprietario, per usare Claude Code e Codex nello stesso progetto senza duplicare lavoro né creare conflitti nel checkout.
+
+### Scelta consigliata
+
+Usare **Claude Code come ambiente principale** e installare il plugin ufficiale `openai/codex-plugin-cc`: Claude Code resta l'autore principale del codice, Codex interviene come revisore indipendente e per le verifiche. Il plugin usa lo stesso repository locale, la stessa configurazione e autenticazione della CLI Codex; non serve passare continuamente da un'app all'altra né copiare manualmente il diff.
+
+Installazione da eseguire in Claude Code (una sola volta):
+
+```text
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex@openai-codex
+/reload-plugins
+/codex:setup
+```
+
+Serve Codex autenticato tramite account ChatGPT oppure API key. `/codex:setup` verifica i requisiti e può proporre l'installazione della CLI Codex se manca.
+
+### Ruoli dei modelli
+
+| Situazione | Strumento/modello | Compito |
+|---|---|---|
+| Modifica piccola, UI, form, contenuti | Claude Code + Sonnet | Implementazione veloce |
+| Auth, RLS, SQL, PWA, refactor ampio | Claude Code + Opus | Implementazione ad alta attenzione |
+| Nuova fase o decisione ambigua | Claude Code + Fable | Solo piano: file, rischi, test e criteri di accettazione; non scrive codice |
+| Review sicurezza/architettura | Codex | Review indipendente del diff, senza modifiche |
+| Build, test, regressioni e QA | Codex | Esegue verifiche e riporta risultati concreti |
+
+Sonnet è il default per la maggior parte del lavoro. Opus va riservato ai cambi ad alto rischio o molto trasversali; Fable serve solo quando serve un piano approfondito per un lavoro lungo, non per ogni feature.
+
+### Flusso normale
+
+```text
+Claude Code (Sonnet/Opus implementa)
+        ↓
+/codex:review --base main --background
+        ↓
+Claude Code corregge i rilievi concreti
+        ↓
+/codex:review --base main
+```
+
+Per le modifiche rischiose (PWA/cache, Supabase/RLS, auth, migrazioni SQL, race condition), usare prima la review avversariale:
+
+```text
+/codex:adversarial-review --base main --background controlla cache PWA, autorizzazioni RLS, race condition e regressioni guest/admin
+```
+
+Per una nuova fase complessa il flusso completo è:
+
+```text
+Claude Code + Fable (solo piano)
+        ↓
+Codex valida piano e rischi, se necessario
+        ↓
+Claude Code + Opus implementa
+        ↓
+Codex review + test
+        ↓
+Claude Code corregge
+```
+
+### Regole di sicurezza del workflow
+
+1. **Un solo agente scrive file alla volta.** Non usare `/codex:rescue` per implementare mentre Claude Code sta modificando lo stesso checkout.
+2. **Codex review è read-only.** Usare `/codex:review` per il review normale e `/codex:adversarial-review` per mettere in discussione decisioni e rischi; entrambi non modificano codice.
+3. **`/codex:rescue` solo per lavoro isolato.** Se serve delegare una correzione a Codex, fermare Claude Code oppure usare un branch/worktree separato.
+4. **Niente review gate automatico come default.** Il gate può creare cicli Claude↔Codex lunghi e consumare rapidamente l'utilizzo; abilitarlo solo durante una sessione monitorata.
+5. **`CLAUDE.md` resta la fonte di verità.** Ogni agente deve leggerlo prima di pianificare, implementare o fare review. Il piano di una fase va conservato nel task/branch o incollato nel prompt dell'implementatore: non affidarsi alla memoria di chat diverse.
+6. **L'app Codex separata è opzionale.** Usarla per una review lunga e interattiva, per riprendere un task trasferito con `/codex:transfer`, o per lavoro isolato in un worktree; non è necessaria per il ciclo quotidiano.
