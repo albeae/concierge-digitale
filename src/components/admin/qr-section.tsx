@@ -3,9 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, Printer } from "lucide-react";
+import { Check, Copy, Download, Printer, Share2 } from "lucide-react";
 import QRCode from "qrcode";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -41,12 +41,91 @@ export function useQrDataUrl(path: string, width: number) {
 }
 
 /**
- * Sezione QR dell'editor: anteprima del codice, download PNG e link alla
- * scheda A6 stampabile da mettere in camera. Il QR codifica solo
- * https://dominio/<slug>: tutta la logica resta nel routing (vedi CLAUDE.md).
+ * Manda la guida all'ospite prima dell'arrivo: prova la condivisione nativa
+ * (`navigator.share`, su mobile apre il foglio di sistema con WhatsApp, SMS,
+ * ecc.) e, dove non c'è, ripiega su WhatsApp Web con testo precompilato. In
+ * nessun caso si chiede o si salva il numero dell'ospite: il destinatario lo
+ * sceglie il titolare nell'app di messaggistica.
  */
-export function QrSection({ bnbId }: { bnbId: string }) {
-  const { url, dataUrl } = useQrDataUrl(`/${bnbId}`, 480);
+function ShareGuide({ bnbId, bnbName }: { bnbId: string; bnbName: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const guideUrl = `${SITE_URL}/${bnbId}`;
+  const shareText = `Ecco la guida di ${bnbName}`;
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(
+    `${shareText}: ${guideUrl}`,
+  )}`;
+
+  const openWhatsapp = () =>
+    window.open(whatsappHref, "_blank", "noopener,noreferrer");
+
+  const handleShare = async () => {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: bnbName, text: shareText, url: guideUrl });
+      } catch (err) {
+        // AbortError = il titolare ha chiuso il foglio di condivisione: ok,
+        // nessun fallback. Per un errore vero ripieghiamo su WhatsApp.
+        if ((err as Error)?.name !== "AbortError") openWhatsapp();
+      }
+    } else {
+      openWhatsapp();
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(guideUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard non disponibile: il link resta comunque leggibile a schermo */
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border pt-4">
+      <p className="text-sm font-semibold">Condividi il link con l&apos;ospite</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Mandaglielo prima dell&apos;arrivo: apre la guida senza installare
+        nulla. Il numero dell&apos;ospite non viene salvato da nessuna parte.
+      </p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button
+          type="button"
+          onClick={handleShare}
+          className="h-11 gap-2 rounded-2xl bg-terracotta px-4 font-semibold text-primary-foreground hover:bg-terracotta-strong"
+        >
+          <Share2 className="size-4" aria-hidden />
+          Condividi la guida
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleCopy}
+          className="h-11 gap-2 rounded-2xl px-4 font-semibold"
+        >
+          {copied ? (
+            <Check className="size-4" aria-hidden />
+          ) : (
+            <Copy className="size-4" aria-hidden />
+          )}
+          {copied ? "Copiato!" : "Copia link"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sezione QR dell'editor: anteprima del codice, download PNG, link alla scheda
+ * A6 stampabile da mettere in camera e condivisione del link all'ospite. Il QR
+ * e il link codificano solo https://dominio/<slug>: tutta la logica resta nel
+ * routing (vedi CLAUDE.md).
+ */
+export function QrSection({ bnbId, bnbName }: { bnbId: string; bnbName: string }) {
+  const { dataUrl } = useQrDataUrl(`/${bnbId}`, 480);
+  const guideUrl = `${SITE_URL}/${bnbId}`;
 
   return (
     <Card className="py-0">
@@ -55,7 +134,7 @@ export function QrSection({ bnbId }: { bnbId: string }) {
           {dataUrl ? (
             <img
               src={dataUrl}
-              alt={`QR code della guida di ${bnbId}`}
+              alt={`QR code della guida di ${bnbName}`}
               className="size-32 shrink-0 rounded-xl border border-border"
             />
           ) : (
@@ -69,7 +148,7 @@ export function QrSection({ bnbId }: { bnbId: string }) {
               Il QR della tua guida
             </p>
             <p className="mt-1 break-all text-xs text-muted-foreground">
-              {url ?? "…"}
+              {guideUrl}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               Gli ospiti lo inquadrano con la fotocamera e aprono la guida:
@@ -104,6 +183,8 @@ export function QrSection({ bnbId }: { bnbId: string }) {
             Stampa scheda A6
           </Link>
         </div>
+
+        <ShareGuide bnbId={bnbId} bnbName={bnbName} />
       </CardContent>
     </Card>
   );
