@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
-import { submitGuestFeedback } from "@/app/[bnbId]/actions";
+import { submitGuestFeedback, type GuestFeedbackResult } from "@/app/[bnbId]/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -50,12 +50,23 @@ export function ReviewModule({ bnbId, googleReviewsUrl, t }: ReviewModuleProps) 
   // perde quello che ha scritto e può riprovare.
   const handleSubmit = () => {
     startTransition(async () => {
-      const result = await submitGuestFeedback({
-        bnbId,
-        rating,
-        message: feedback,
-        website,
-      });
+      // Try/catch necessario da quando esiste anche un blocco a livello di
+      // rete (WAF Vercel, vedi docs/vercel-waf-feedback-rate-limit.md): un
+      // 403/429 del firewall non è una risposta valida della server action,
+      // il fetch lancia. Senza catch qui l'ospite vedrebbe un errore non
+      // gestito invece del solito toast generico.
+      let result: GuestFeedbackResult;
+      try {
+        result = await submitGuestFeedback({
+          bnbId,
+          rating,
+          message: feedback,
+          website,
+        });
+      } catch {
+        toast.error(t.error);
+        return;
+      }
       if (!result.ok) {
         toast.error(t.error);
         return;

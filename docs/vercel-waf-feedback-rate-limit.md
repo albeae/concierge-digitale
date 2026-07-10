@@ -51,9 +51,16 @@ Progetto → **Firewall** → **Configure** → **+ New Rule**.
 | Time Window         | **60s**                                           |
 | Request Limit       | **10**                                            |
 | Counting key        | **IP** (unica chiave utile su Hobby, oltre a JA4) |
-| Action              | **Deny (429)**                                    |
+| Action              | **Deny (403)** (la UI reale offre 403 su "Deny", non 429) |
 
 Poi **Review Changes** → **Publish** (applica alla produzione).
+
+> Nota tecnica: un blocco WAF (403) risponde PRIMA che la Server Action
+> Next.js parta, quindi il client riceve qualcosa di diverso da quello che si
+> aspetta da `submitGuestFeedback` e il `fetch` interno lancia. Il
+> `try/catch` in `review-module.tsx` (`handleSubmit`) intercetta questo caso
+> e mostra lo stesso toast generico di errore — senza, l'ospite bloccato
+> vedrebbe un errore non gestito invece del messaggio consueto.
 
 ### Perché questi numeri
 
