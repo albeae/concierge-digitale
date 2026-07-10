@@ -72,10 +72,10 @@ export default async function EditBnbPage({ params }: EditBnbPageProps) {
         </EditorSection>
 
         <EditorSection
-          title="QR code e stampa"
-          description="Il codice da far inquadrare agli ospiti e la scheda da mettere in camera."
+          title="QR code, stampa e condivisione"
+          description="Il codice da far inquadrare agli ospiti, la scheda da mettere in camera e il link da inviare prima dell'arrivo."
         >
-          <QrSection bnbId={bnb.id} />
+          <QrSection bnbId={bnb.id} bnbName={bnb.name} />
         </EditorSection>
 
         <EditorSection
