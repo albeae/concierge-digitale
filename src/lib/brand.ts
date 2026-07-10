@@ -9,8 +9,8 @@
  * di "Casa Rossa".
  */
 export const BRAND = {
-  /** Terracotta: colore tema della status bar / theme_color PWA. */
-  primary: "#b85c3c",
-  /** Crema: sfondo dello splash screen PWA. */
-  background: "#fbf4ea",
+  /** Rosso pompeiano: colore tema della status bar / theme_color PWA. */
+  primary: "#ae3f27",
+  /** Intonaco rosato: sfondo dello splash screen PWA. */
+  background: "#faede9",
 } as const;

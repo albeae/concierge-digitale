@@ -16,14 +16,14 @@ type ColorState = ThemeColorValues;
  * per il pulsante "Ripristina colori base".
  */
 const BASE_COLORS: ColorState = {
-  primaryColor: "#b85c3c",
-  primaryForeground: "#fef9f3",
-  secondaryColor: "#d99a3c",
-  backgroundColor: "#fbf4ea",
-  cardColor: "#fffcf8",
-  sectionColor: "#f7e5cf",
-  textColor: "#3d281f",
-  mutedColor: "#765f53",
+  primaryColor: "#ae3f27",
+  primaryForeground: "#fff7f3",
+  secondaryColor: "#c17f21",
+  backgroundColor: "#faede9",
+  cardColor: "#fffbf8",
+  sectionColor: "#f8dfcf",
+  textColor: "#371f19",
+  mutedColor: "#6c4d44",
 };
 
 const GROUPS: {

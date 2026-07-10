@@ -13,7 +13,7 @@
   --color-cream: var(--cream);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -44,10 +44,12 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   /* Elevazione centralizzata: ogni ombra dell'app deriva da questi token,
-     mai valori "arbitrary" ripetuti nei componenti. */
-  --shadow-soft: 0 2px 16px -4px rgb(0 0 0 / 0.10);
-  --shadow-raised: 0 8px 30px -10px rgb(0 0 0 / 0.25);
-  --shadow-header: 0 4px 20px -8px rgb(0 0 0 / 0.35);
+     mai valori "arbitrary" ripetuti nei componenti. Le ombre sono tinte sul
+     bruno caldo della palette (non nero puro): su fondi caldi il nero neutro
+     vira al grigio sporco, l'ombra calda resta "sole di Roma". */
+  --shadow-soft: 0 2px 16px -4px oklch(0.35 0.06 35 / 0.12);
+  --shadow-raised: 0 8px 30px -10px oklch(0.35 0.06 35 / 0.28);
+  --shadow-header: 0 4px 20px -8px oklch(0.3 0.06 35 / 0.38);
   --shadow-brand: 0 8px 30px -8px var(--terracotta);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -59,36 +61,41 @@
 }
 
 :root {
-  /* Palette calda "Casa Rossa": terracotta, ocra e crema, richiami a Roma. */
-  --background: oklch(0.977 0.013 78);
-  --foreground: oklch(0.3 0.035 45);
-  --card: oklch(0.992 0.006 78);
-  --card-foreground: oklch(0.3 0.035 45);
-  --popover: oklch(0.992 0.006 78);
-  --popover-foreground: oklch(0.3 0.035 45);
-  --primary: oklch(0.56 0.145 38);
-  --primary-foreground: oklch(0.985 0.01 78);
-  --secondary: oklch(0.93 0.035 72);
-  --secondary-foreground: oklch(0.36 0.05 45);
-  --muted: oklch(0.945 0.02 75);
-  --muted-foreground: oklch(0.505 0.035 50);
-  --accent: oklch(0.86 0.075 75);
-  --accent-foreground: oklch(0.32 0.05 45);
+  /* Palette "Roma centro": rosso pompeiano dei palazzi, giallo Roma, intonaco
+     rosato al posto della crema generica — lo sfondo è tinto sulla STESSA
+     tonalità della terracotta (hue ~40), come i muri sbiaditi dal sole.
+     Contrasti WCAG verificati matematicamente (vedi PR restyling Fase 1):
+     testo/sfondo 13.3:1, muted/sfondo 6.6:1, primary-fg/primary 5.6:1,
+     terracotta come testo su card 5.7:1, ocra come testo su card 3.2:1. */
+  --background: oklch(0.955 0.015 40);
+  --foreground: oklch(0.27 0.04 35);
+  --card: oklch(0.99 0.006 45);
+  --card-foreground: oklch(0.27 0.04 35);
+  --popover: oklch(0.99 0.006 45);
+  --popover-foreground: oklch(0.27 0.04 35);
+  --primary: oklch(0.52 0.15 34);
+  --primary-foreground: oklch(0.982 0.012 45);
+  --secondary: oklch(0.92 0.035 55);
+  --secondary-foreground: oklch(0.33 0.05 38);
+  --muted: oklch(0.93 0.02 45);
+  --muted-foreground: oklch(0.45 0.045 36);
+  --accent: oklch(0.87 0.06 60);
+  --accent-foreground: oklch(0.3 0.05 38);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.89 0.022 70);
-  --input: oklch(0.89 0.022 70);
-  --ring: oklch(0.56 0.145 38);
+  --border: oklch(0.875 0.03 45);
+  --input: oklch(0.875 0.03 45);
+  --ring: oklch(0.52 0.15 34);
   /* Colori d'accento riutilizzabili (bg-terracotta, text-ochre, ...) */
-  --terracotta: oklch(0.56 0.145 38);
-  --terracotta-strong: oklch(0.5 0.15 34);
-  --ochre: oklch(0.74 0.125 74);
-  --cream: oklch(0.977 0.013 78);
+  --terracotta: oklch(0.52 0.15 34);
+  --terracotta-strong: oklch(0.46 0.145 32);
+  --ochre: oklch(0.65 0.13 70);
+  --cream: oklch(0.955 0.015 40);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.875rem;
+  --radius: 1rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -108,6 +115,16 @@
   }
   html {
     @apply font-sans;
+  }
+  /* I titoli (guest e admin) usano il serif Fraunces via token --font-heading:
+     regola di base, così nessun componente deve dichiarare il font a mano. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
   }
 }
 
