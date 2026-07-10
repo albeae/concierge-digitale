@@ -64,7 +64,7 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 
 **Commit.** Conventional in italiano con la fase: `feat(fase-3): …`, `fix: …`, `docs: …`. Commit logici separati (SQL / codice / docs). Chiudi con `Co-Authored-By: Claude <modello> <noreply@anthropic.com>`.
 
-**Autonomia (dal 2026-07-10).** Il proprietario si fida e non revisiona il codice: implementare, verificare con la quality bar (sezione 5) e mergiare le PR a CI verde SENZA chiedere conferma è il default. Da confermare sempre: operazioni distruttive/irreversibili e ogni migrazione SQL da applicare a mano su Supabase. A fine lavoro riporta sempre cosa è stato fatto: l'autonomia è sul procedere, non sulla trasparenza.
+**Autonomia (2026-07-10, raffinata dopo review Codex).** Il proprietario si fida e non revisiona il codice. Merge autonomo a CI verde per il lavoro TECNICO: fix, refactor, hardening, docs, debito. Conferma del proprietario PRIMA del merge per: **nuove feature o cambi di UX visibili all'ospite** (la CI prova che compila, non che la scelta di prodotto sia giusta — e sul prodotto il giudizio del proprietario conta, sul codice no), operazioni distruttive/irreversibili, migrazioni SQL manuali, configurazioni Vercel/Supabase. Implementare e aprire la PR resta sempre autonomo: si chiede al momento del merge, mostrando cosa cambia per l'ospite. A fine lavoro riporta sempre cosa è stato fatto.
 
 **Colori e token.** Nessun colore/ombra/raggio scritto a mano nei componenti: solo utility Tailwind mappate su CSS variables (`bg-terracotta`, `text-primary-foreground`, `shadow-soft`…). Tema per-struttura iniettato da `ThemeProvider` in tre famiglie: identità (`--primary`/`--terracotta`/`--terracotta-strong`/`--ring`, `--ochre`), sfondi (`--background`, `--card`/`--popover`, `--secondary`/`--accent`), testo (`--foreground`/`--card-foreground`/`--popover-foreground`, `--muted-foreground`, `--primary-foreground`). I 5 colori opzionali, se assenti, non sovrascrivono nulla. Whitelist hex: `brand.ts`, `recycling.ts`, `DEFAULTS` in `theme-colors.tsx` (default calcolati per conversione matematica da oklch, non a occhio).
 
@@ -99,6 +99,7 @@ Micro SaaS per B&B/affittacamere di Roma: l'ospite scansiona un QR e apre la gui
 15. **La porta dell'utente.** La 3000 spesso è del `npm run dev` dell'utente. Mai uccidere processi non tuoi; usa il preview (`autoPort`); se non parte, dillo e prosegui con verifiche non-browser.
 16. **Il comportamento solo-produzione.** Service worker e banner PWA non si vedono con `npm run dev`: serve `npm run build` + `next start`. Il profilo di preview per questo sta nel `launch.json` della cartella radice della sessione (non versionato), non nel repo: verifica che esista prima di crearne uno duplicato.
 17. **La fase saltata.** "Parti piccolo, poi generalizza": non anticipare infrastruttura delle fasi future (multi-tenant self-service, pagamenti) se non richiesto; una fase alla volta, testata.
+18. **Il segreto nella guida** (review Codex 2026-07-10). Le pagine ospite sono pubbliche: URL permanente, lettura anon via RLS. Un codice del portone/keybox/PIN allarme pubblicato lì è un accesso fisico regalato a chiunque. Regola: nei contenuti guest solo istruzioni non segrete (piano, citofono, dove ritirare/lasciare le chiavi); i codici si mandano all'ospite via WhatsApp — mai nel DB dei contenuti. Ogni campo nuovo di testo libero guest deve dirlo nel suo hint admin.
 
 ---
 
@@ -128,7 +129,7 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 2. **Ordine dei commit**: prima l'SQL (se c'è), poi il codice, poi i docs — ognuno autonomo con build verde.
 3. **Verifica end-to-end quando possibile**: preview → login → azione reale → misura → ripristino. Se il preview non parte, dichiara cosa NON hai verificato.
 4. **Passi manuali** per l'utente: numerati a fine risposta, con comandi/SQL pronti da incollare.
-5. **CLAUDE.md è il registro operativo**: aggiornalo quando cambiano architettura, convenzioni o stato fasi — non per ogni fix (la storia sta in git). Tienilo sotto le 200 righe.
+5. **CLAUDE.md è il registro operativo**: aggiornalo quando cambiano architettura, convenzioni o stato fasi — non per ogni fix. ~200 righe è il budget di contesto (è ciò che ha impedito il ritorno alle 335 righe narrative), non un dogma: una decisione storica che merita dettaglio va in `docs/decisions/` con un link da qui, non cancellata e non lasciata solo a git.
 
 ---
 
@@ -162,7 +163,7 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 - **Riordino posti atomico**: funzione SQL `reorder_places` (valida la permutazione, unica UPDATE, lock sulla riga padre, `security invoker`, EXECUTE revocato a PUBLIC) chiamata via `rpc`; client ottimistico (l'ordine completo vince, rollback su errore).
 - **Storage per-cartella**: bucket pubblico `bnb-images`, percorsi `<slug>/<tipo>-<timestamp>`, policy su `(storage.foldername(objects.name))[1]`. Nome file sempre nuovo: mai combattere la cache CDN con l'upsert.
 - **Immagini posti con `<img>` + fallback emoji su `onError`** (non `next/image`): nessun URL esterno può rompere la guest.
-- **Istruzioni check-in/check-out** (`checkInInstructions`/`checkOutInstructions`, testo libero multilinea per arrivo/self check-in/chiavi, sotto l'orario nella tab Info, mostrate solo se compilate con `whitespace-pre-line`): sono nuovi campi dentro il jsonb `content` → nessuna migrazione SQL, con fallback per-chiave su `en` automatico. È il vantaggio concreto della tabella unica con jsonb.
+- **Istruzioni check-in/check-out** (`checkInInstructions`/`checkOutInstructions`, testo libero multilinea per arrivo/self check-in/chiavi, sotto l'orario nella tab Info, mostrate solo se compilate con `whitespace-pre-line`): nuovi campi dentro il jsonb `content` → nessuna migrazione SQL, fallback per-chiave su `en` automatico. Contengono SOLO istruzioni non segrete — MAI codici di accesso (errore n. 18): l'hint dell'editor lo dice esplicitamente.
 - **URL validati server-side** (`url-validation.ts`): host Google veri (no substring) per recensioni/Maps; https o path relativo per le immagini. Colori tema validati `#rrggbb` in `updateBnbGeneral`.
 - **QR generato nel browser** con `window.location.origin`, colori fissi nero/bianco (un QR a basso contrasto non si scansiona). Attenzione: stampato da una preview Vercel codificherebbe l'URL sbagliato.
 - **Meteo client-side** (Open-Meteo, gratis, no key): le pagine restano statiche; coordinate fisse su Roma; su errore placeholder discreto.
@@ -180,20 +181,20 @@ Prima di dichiarare finito un lavoro, TUTTI questi devono passare:
 
 **Debiti accettati per scelta** (non richiedono azione): contrasto badge ZTL/accento (~2.3:1, valutato col proprietario 2026-07-10); `walkingDistance` non localizzato; meteo su Roma fissa (multi-città richiederà lat/lon per-struttura).
 
-**Piano d'azione, in ordine di priorità:** (1) landing su `/`, chiude la Fase 4; (2) badge feedback non letti nell'admin (colonna `read_at` + UI); (3) QR sicuro fuori produzione, prima di stampare per la Fase 7; (4) test offline reale su iPhone/Android (Fase 5); (5) `next/image` con `remotePattern` Supabase; (6) Fase 6 — loading states, test e2e Playwright, analytics senza PII; (7) Fase 7 — pilota reale con QR in camera; (8) pulizia immagini orfane nel bucket; (9) Fase 8 (SaaS) solo dopo che il pilota valida il prodotto — non anticipare.
+**Piano d'azione, in ordine di valore per il pilota (rivisto con review Codex 2026-07-10 — "chiudere una fase" non è un criterio di valore):** (1) istruzioni check-in/out senza segreti ✅ (errore n. 18 + hint editor); (2) dominio canonico nei QR/stampa (mai l'origin di una preview); (3) test offline reale su iPhone/Android (Fase 5); (4) test fisico del QR in camera; (5) condivisione guida via WhatsApp/Web Share — senza salvare il numero dell'ospite; (6) primo pilot (Fase 7); (7) landing commerciale su `/` (Fase 4); (8) badge feedback non letti — solo dopo aver osservato quanto spesso il titolare apre l'admin; (9) 2 smoke test e2e (MAI contro produzione: progetto Supabase dedicato o dati locali) e analytics solo dopo aver definito la metrica (aperture vs sessioni vs ospiti unici). `next/image`: non è pre-pilot di default — prima misurare peso immagini e LCP su 4G, l'`<img>` attuale è robusto. Fase 8 (SaaS): solo dopo che il pilota valida il prodotto.
 
 **Idee proposte** (backlog prodotto, non anticipare senza richiesta esplicita salvo tecnicismi che il proprietario non può valutare):
 
 | # | Idea | Valore | Complessità | Priorità |
 |---|---|---|---|---|
 | 1 | ✅ Check-in/check-out nella guida (arrivo, self check-in, chiavi) — fatto, vedi sezione 8 | domanda n.1 di ogni ospite | bassa | alta |
-| 2 | Badge feedback non letti nell'admin | il negativo conta solo se visto in tempo | bassa | alta |
-| 3 | Invio guida via WhatsApp pre-arrivo (`whatsappUrl` già esiste) | ospite informato prima, marketing passivo | bassa | media |
-| 4 | Contatore visite privacy-friendly (evento anonimo, no PII) | prova d'uso del QR, argomento Fase 8 | media | media |
+| 2 | Badge feedback non letti nell'admin | il negativo conta solo se visto in tempo | bassa | media — dopo aver osservato l'uso reale dell'admin |
+| 3 | Invio guida via WhatsApp/Web Share pre-arrivo (senza salvare il numero dell'ospite) | ospite informato prima, marketing passivo | bassa | alta (pre-pilot) |
+| 4 | Contatore visite privacy-friendly | prova d'uso del QR, argomento Fase 8 | media | bassa — prima definire la metrica (aperture/sessioni/ospiti) |
 | 5 | Email al titolare per feedback ≤2 stelle (Edge Function) | chiude il ciclo mentre l'ospite è in struttura | medio/alta | bassa |
 
 ---
 
 ## 10. Collaborazione Claude Code + Codex
 
-Claude Code è l'ambiente principale (implementa); Codex fa review indipendente e QA tramite il plugin `codex` già installato. Regole: un solo agente scrive alla volta; `/codex:review --base main` per il review normale, `/codex:adversarial-review` prima di merge rischiosi (PWA/cache, RLS/auth, migrazioni SQL, race); `/codex:rescue` solo su branch/worktree separato; niente review gate automatico di default. CLAUDE.md resta la fonte di verità: ogni agente lo legge prima di pianificare o implementare.
+Claude Code è l'ambiente principale (implementa); Codex fa review indipendente e QA tramite il plugin `codex` già installato. Regole: **un solo agente scrive alla volta — sul serio**: mentre una review Codex è in corso, Claude non cambia branch né committa (violato una volta il 2026-07-10: la review girava su file che intanto cambiavano); `/codex:review --base main` per il review normale, `/codex:adversarial-review` prima di merge rischiosi (PWA/cache, RLS/auth, migrazioni SQL, race); `/codex:rescue` solo su branch/worktree separato; niente review gate automatico di default. CLAUDE.md resta la fonte di verità: ogni agente lo legge prima di pianificare o implementare.
