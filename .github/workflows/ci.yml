@@ -30,6 +30,9 @@ jobs:
       - name: SQL su PGlite (schema + policy RLS)
         run: npm run test:sql
 
+      - name: Unit (rate limiter feedback)
+        run: npm run test:unit
+
       # Le due regole "grep" della quality bar: niente colori hex fuori
       # whitelist (romperebbero il theming per-struttura) e niente
       # text-white/bg-white fuori dai cestini AMA (sparirebbero coi temi).
